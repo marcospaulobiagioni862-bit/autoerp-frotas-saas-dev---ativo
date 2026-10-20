@@ -604,6 +604,36 @@ export const trafficTickets = pgTable('traffic_tickets', {
   status: text('status').notNull(),
 });
 
+// PH-074. Calendario de IPVA e licenciamento por final de placa. As datas sao
+// CADASTRADAS, nunca embutidas no codigo: a Sefaz publica um calendario por ano e
+// chutar vencimento de imposto gera multa para o cliente.
+export const vehicleTaxCalendar = pgTable('vehicle_tax_calendar', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  uf: text('uf').notNull(),
+  referenceYear: integer('reference_year').notNull(),
+  plateLastDigit: integer('plate_last_digit').notNull(),
+  taxType: text('tax_type').notNull(),
+  installment: integer('installment').notNull().default(1),
+  dueDate: date('due_date').notNull(),
+  notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  entrada: uniqueIndex('uq_vehicle_tax_calendar_entry').on(
+    table.companyId, table.uf, table.referenceYear, table.plateLastDigit, table.taxType, table.installment,
+  ),
+  busca: index('idx_vehicle_tax_calendar_lookup').on(
+    table.companyId, table.uf, table.referenceYear, table.plateLastDigit,
+  ),
+  tenantPolicy: pgPolicy('tenant_isolation_vehicle_tax_calendar', {
+    as: 'permissive', for: 'all',
+    using: sql`company_id = current_setting('app.current_tenant', true)`,
+    withCheck: sql`company_id = current_setting('app.current_tenant', true)`,
+  }),
+}));
+
 export const trackers = pgTable('trackers', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
