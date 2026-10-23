@@ -6,6 +6,7 @@ import { Button } from '../ui/Button';
 import { CurrencyInput } from '../ui/CurrencyInput';
 import { FinanceSettlementClient, SettlementAccountOption } from '../../api/financeSettlementClient';
 import { AlertCircle, Landmark } from 'lucide-react';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface QuickAccountModalProps {
   isOpen: boolean;
@@ -109,7 +110,7 @@ export const QuickAccountModal: React.FC<QuickAccountModalProps> = ({
           <Button
             type="button"
             variant="ghost"
-            onClick={onClose}
+            onClick={(event) => requestGuardedClose(event, onClose)}
             disabled={isSubmitting}
           >
             Cancelar
