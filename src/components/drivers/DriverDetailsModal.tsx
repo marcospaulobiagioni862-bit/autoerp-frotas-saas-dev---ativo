@@ -10,6 +10,7 @@ import {
  CreditCard,
  DollarSign,
  Download,
+ Edit,
  ExternalLink,
  Eye,
  File,
@@ -55,7 +56,7 @@ import { DocumentPreviewModal } from '../documents/DocumentPreviewModal';
 import { DocumentCenterModal } from '../documents/DocumentCenterModal';
 import { EntityFileGallery } from '../documents/EntityFileGallery';
 import { DocumentStatus, DriverStatus } from '../../types/enums';
-import type { DriverHealthAndEmergency, FileAttachment } from '../../types/entities';
+import type { Driver, DriverHealthAndEmergency, FileAttachment } from '../../types/entities';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 import {
  DriverLegacyDetailsBridge,
@@ -76,6 +77,7 @@ interface DriverDetailsModalProps {
  onSelectVehicle?: (vehicleId: string) => void;
  onDriverUpdated?: () => void;
  onRenewCnh?: (driverId: string) => void;
+ onEditDriver?: (driver: Driver) => void;
 }
 
 const DRIVER_AUDIT_FIELD_LABELS: Record<string, string> = {
@@ -164,6 +166,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  onSelectVehicle,
  onDriverUpdated,
  onRenewCnh,
+ onEditDriver,
 }) => {
  const bridge = useMemo(() => new DriverLegacyDetailsBridge(), []);
  const [activeTab, setActiveTab] = useState<DriverTab>('overview');
@@ -611,6 +614,12 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  <p className="text-xs text-graphite-500 font-mono">CPF: {driver.cpf} • CNH: {driver.cnhNumber} ({driver.cnhCategory})</p>
  </div>
  </div>
+ <div className="flex flex-wrap items-center gap-2">
+ {onEditDriver && (
+ <Button variant="outline" id="btn-edit-driver-details" onClick={() => onEditDriver(driver)}>
+ <Edit className="w-4 h-4 mr-1.5" />Editar Cadastro
+ </Button>
+ )}
  {driver.status === DriverStatus.BLOCKED ? (
  <Button variant="outline" onClick={() => setIsUnblockDialogOpen(true)}>
  <Unlock className="w-4 h-4 mr-1.5" />Desbloquear
@@ -620,6 +629,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  <Lock className="w-4 h-4 mr-1.5" />Bloquear
  </Button>
  )}
+ </div>
  </div>
 
  {summary.cnhAlert.status !== DocumentStatus.VALID && (

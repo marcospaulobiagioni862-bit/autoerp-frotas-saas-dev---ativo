@@ -7,6 +7,7 @@ import { User, CreditCard, MapPin, FileText, AlertCircle, Camera, Trash2, CheckC
 import { ModalContainer, Input, Select, Button } from '../ui';
 import { DriverClient, type DriverCreateInput, type DriverUpdateInput } from '../../api/driverClient';
 import { AttachmentClient } from '../../api/attachmentClient';
+import { DriverHealthClient } from '../../api/driverHealthClient';
 import {
  DriverDocumentIntakeClient,
  type ApprovedCnhDriverDraft,
@@ -15,6 +16,8 @@ import { Driver } from '../../types/entities';
 import { DriverStatus } from '../../types/enums';
 import { DriverCnhPrefillButton } from './DriverCnhPrefillButton';
 import type { DriverCnhDraft } from '../../api/driverCnhPrefill';
+import { DriverResidencePrefillButton } from './DriverResidencePrefillButton';
+import type { DriverResidenceDraft } from '../../api/driverResidencePrefill';
 import {
  PROFILE_PHOTO_DOCUMENT_TYPE,
  PROFILE_PHOTO_MAX_BYTES,
@@ -67,6 +70,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  const [createdDriverId, setCreatedDriverId] = useState<string | null>(null);
  const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
  const [profilePhotoPreviewUrl, setProfilePhotoPreviewUrl] = useState<string | null>(null);
+ const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
  const [profilePhotoUploaded, setProfilePhotoUploaded] = useState(false);
  const [cepLoading, setCepLoading] = useState(false);
  const [cepMessage, setCepMessage] = useState<string | null>(null);
@@ -139,6 +143,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
 
  setCreatedDriverId(null); setProfilePhoto(null); setProfilePhotoUploaded(false); setErrorMessage(null); setSuccessMessage(null); setFieldErrors({}); setCepMessage(null); setShowOtherPlatform(false); setOtherPlatform('');
  setProfilePhotoPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
+ setExistingPhotoUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
  if (profilePhotoInputRef.current) profilePhotoInputRef.current.value = '';
  if (driverToEdit) {
  setFullName(driverToEdit.fullName || ''); setCpf(driverToEdit.cpf || ''); setRg(driverToEdit.rg || ''); setBirthDate(driverToEdit.birthDate || ''); setPhone(formatPhone(driverToEdit.phone || '')); setWhatsapp(formatPhone(driverToEdit.whatsapp || '')); setEmail(driverToEdit.email || ''); setMaritalStatus(driverToEdit.maritalStatus || ''); setProfession(driverToEdit.profession || ''); setMotherName(driverToEdit.motherName || ''); setPixKey(driverToEdit.pixKey || '');
@@ -146,6 +151,33 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  setResidenceType((driverToEdit.address?.residenceType || '') as ResidenceType); setResidenceTypeOther(driverToEdit.address?.residenceTypeOther || ''); setCondominiumName(driverToEdit.address?.condominiumName || ''); setBlockTower(driverToEdit.address?.blockTower || ''); setUnit(driverToEdit.address?.unit || ''); setFloor(driverToEdit.address?.floor || ''); setAddressReference(driverToEdit.address?.reference || '');
  setCnhNumber(driverToEdit.cnhNumber || ''); setCnhCategory(driverToEdit.cnhCategory || ''); setCnhExpiration(driverToEdit.cnhExpiration || ''); setCnhEar(earValue(driverToEdit.cnhEar)); setAppPlatforms(driverToEdit.appPlatforms || []); setStatus(driverToEdit.status || DriverStatus.ACTIVE); setBloodType(''); setAllergies(''); setRelevantConditions(''); setContinuousMedications(''); setEmergencyContactName(''); setEmergencyContactRelationship(''); setEmergencyContactPhone(formatPhone(driverToEdit.emergencyContactPhone || '')); setEmergencyNotes(''); setNotes(driverToEdit.notes || '');
  setShowOtherPlatform((driverToEdit.appPlatforms || []).some((item) => !STANDARD_PLATFORMS.includes(item as typeof STANDARD_PLATFORMS[number])));
+
+ AttachmentClient.list({ entityType: 'Driver', entityId: driverToEdit.id })
+  .then((items) => {
+   const photo = items.filter((i) => !i.isArchived && i.documentType === PROFILE_PHOTO_DOCUMENT_TYPE).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+   if (photo) {
+    AttachmentClient.content(photo.id).then((blob) => {
+     setExistingPhotoUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return URL.createObjectURL(blob);
+     });
+    }).catch(() => {});
+   }
+  }).catch(() => {});
+
+ DriverHealthClient.get(driverToEdit.id)
+  .then((h) => {
+   if (h) {
+    if (h.bloodType) setBloodType(h.bloodType);
+    if (h.allergies) setAllergies(h.allergies);
+    if (h.relevantConditions) setRelevantConditions(h.relevantConditions);
+    if (h.continuousMedications) setContinuousMedications(h.continuousMedications);
+    if (h.emergencyContactName) setEmergencyContactName(h.emergencyContactName);
+    if (h.emergencyContactRelationship) setEmergencyContactRelationship(h.emergencyContactRelationship);
+    if (h.emergencyContactPhone) setEmergencyContactPhone(formatPhone(h.emergencyContactPhone));
+    if (h.emergencyNotes) setEmergencyNotes(h.emergencyNotes);
+   }
+  }).catch(() => {});
  } else {
  setFullName(initialCnhDraft?.fullName || ''); setCpf(initialCnhDraft?.cpf || ''); setRg(initialCnhDraft?.rg || ''); setBirthDate(initialCnhDraft?.birthDate || ''); setPhone(''); setWhatsapp(''); setEmail(''); setMaritalStatus(''); setProfession(''); setMotherName(''); setPixKey('');
  setZipCode(''); setStreet(''); setNumber(''); setComplement(''); setNeighborhood(''); setCity(''); setState(''); setResidenceType(''); setResidenceTypeOther(''); setCondominiumName(''); setBlockTower(''); setUnit(''); setFloor(''); setAddressReference('');
@@ -222,6 +254,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  );
 
  useEffect(() => () => { if (profilePhotoPreviewUrl) URL.revokeObjectURL(profilePhotoPreviewUrl); }, [profilePhotoPreviewUrl]);
+ useEffect(() => () => { if (existingPhotoUrl) URL.revokeObjectURL(existingPhotoUrl); }, [existingPhotoUrl]);
  const clearFieldError = (field: FieldName) => setFieldErrors((current) => { if (!current[field]) return current; const next = { ...current }; delete next[field]; return next; });
  const clearProfilePhoto = () => { setProfilePhoto(null); setProfilePhotoPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; }); if (profilePhotoInputRef.current) profilePhotoInputRef.current.value = ''; };
  const selectProfilePhoto = (selected: File | undefined) => {
@@ -231,6 +264,17 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  setProfilePhoto(selected); setProfilePhotoUploaded(false); setProfilePhotoPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return URL.createObjectURL(selected); });
  };
  const applyApprovedCnhDraft = (draft: DriverCnhDraft) => { if (draft.fullName !== undefined) setFullName(draft.fullName); if (draft.cpf !== undefined) setCpf(draft.cpf); if (draft.rg !== undefined) setRg(draft.rg); if (draft.birthDate !== undefined) setBirthDate(draft.birthDate); if (draft.cnhNumber !== undefined) setCnhNumber(draft.cnhNumber); if (draft.cnhCategory !== undefined) setCnhCategory(draft.cnhCategory); if (draft.cnhExpiration !== undefined) setCnhExpiration(draft.cnhExpiration); };
+ const applyResidenceDraft = (draft: DriverResidenceDraft) => {
+  if (draft.zipCode) { setZipCode(formatCep(draft.zipCode)); clearFieldError('zipCode'); }
+  if (draft.street) { setStreet(draft.street); clearFieldError('street'); }
+  if (draft.number) { setNumber(draft.number); clearFieldError('number'); }
+  if (draft.complement) setComplement(draft.complement);
+  if (draft.neighborhood) { setNeighborhood(draft.neighborhood); clearFieldError('neighborhood'); }
+  if (draft.city) { setCity(draft.city); clearFieldError('city'); }
+  if (draft.state) { setState(draft.state.toUpperCase()); clearFieldError('state'); }
+  if (draft.residenceType) { setResidenceType(draft.residenceType); clearFieldError('residenceType'); }
+  setHasUserChanges(true);
+ };
  const togglePlatform = (platform: string) => setAppPlatforms((current) => current.includes(platform) ? current.filter((item) => item !== platform) : [...current, platform]);
  const toggleAllPlatforms = () => {
  const allSelected = STANDARD_PLATFORMS.every((platform) => appPlatforms.includes(platform));
@@ -274,6 +318,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  if (requiresCompleteProfile && !email.trim()) errors.email = 'Informe o e-mail do motorista.'; else if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errors.email = 'Informe um e-mail válido.';
  if (zipCode.trim() && digits(zipCode).length !== 8) errors.zipCode = 'CEP deve ter 8 números.';
  if (state.trim() && !/^[A-Za-z]{2}$/.test(state.trim())) errors.state = 'UF deve ter 2 letras.';
+ if (emergencyContactPhone.trim() && !validPhone(emergencyContactPhone)) errors.emergencyContactPhone = 'Telefone de emergência inválido.';
  if (requiresCompleteProfile) {
  if (!residenceType) errors.residenceType = 'Selecione Casa, Apartamento ou Outro.';
  if (digits(zipCode).length !== 8) errors.zipCode = 'Informe um CEP válido com 8 números.';
@@ -292,7 +337,6 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  if (!emergencyContactName.trim()) errors.emergencyContactName = 'Informe o contato de emergência.';
  if (!emergencyContactRelationship.trim()) errors.emergencyContactRelationship = 'Informe o parentesco ou relação.';
  if (!emergencyContactPhone.trim()) errors.emergencyContactPhone = 'Informe o telefone de emergência.';
- else if (!validPhone(emergencyContactPhone)) errors.emergencyContactPhone = 'Telefone de emergência inválido.';
  }
  return errors;
  };
@@ -306,6 +350,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  try {
  const normalizedCpf = digits(cpf); const normalizedCnh = digits(cnhNumber); const normalizedPhone = cleanPhoneDigits(phone); const normalizedWhatsapp = cleanPhoneDigits(whatsapp); const normalizedZipCode = cleanCepDigits(zipCode);
  const addressHasData = !!(normalizedZipCode || street.trim() || number.trim() || complement.trim() || neighborhood.trim() || city.trim() || state.trim() || residenceType || residenceTypeOther.trim() || condominiumName.trim() || blockTower.trim() || unit.trim() || floor.trim() || addressReference.trim());
+ const hasHealthData = !!(bloodType.trim() || allergies.trim() || relevantConditions.trim() || continuousMedications.trim() || emergencyContactName.trim() || emergencyContactRelationship.trim() || emergencyContactPhone.trim() || emergencyNotes.trim());
  const input: DriverCreateInput = {
  fullName: fullName.trim(), cpf: normalizedCpf, rg: rg.trim() || undefined, birthDate,
  phone: normalizedPhone, whatsapp: normalizedWhatsapp || normalizedPhone, email: email.trim() || undefined,
@@ -327,9 +372,18 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  allergies: allergies.trim() || undefined,
  relevantConditions: relevantConditions.trim() || undefined,
  continuousMedications: continuousMedications.trim() || undefined,
- emergencyContactName: emergencyContactName.trim(),
- emergencyContactRelationship: emergencyContactRelationship.trim(),
- emergencyContactPhone: cleanPhoneDigits(emergencyContactPhone),
+ emergencyContactName: emergencyContactName.trim() || undefined,
+ emergencyContactRelationship: emergencyContactRelationship.trim() || undefined,
+ emergencyContactPhone: cleanPhoneDigits(emergencyContactPhone) || undefined,
+ emergencyNotes: emergencyNotes.trim() || undefined,
+ } : (driverToEdit && hasHealthData) ? {
+ bloodType: bloodType.trim() || undefined,
+ allergies: allergies.trim() || undefined,
+ relevantConditions: relevantConditions.trim() || undefined,
+ continuousMedications: continuousMedications.trim() || undefined,
+ emergencyContactName: emergencyContactName.trim() || undefined,
+ emergencyContactRelationship: emergencyContactRelationship.trim() || undefined,
+ emergencyContactPhone: cleanPhoneDigits(emergencyContactPhone) || undefined,
  emergencyNotes: emergencyNotes.trim() || undefined,
  } : undefined,
  };
@@ -400,7 +454,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  <div className="lg:col-span-2"><Input label="Chave PIX para devolução de caução" value={pixKey} onChange={(e) => setPixKey(e.target.value)} /></div>
  </div></div>
 
- {!driverToEdit && <div className="space-y-3"><div className="flex items-center gap-2 pb-2 border-b border-graphite-200 dark:border-graphite-800"><Camera className="w-4 h-4 text-success-icon " /><h3 className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">Foto do motorista (opcional)</h3></div><div className="flex flex-wrap items-center gap-3"><div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-graphite-200 bg-graphite-100 dark:border-graphite-700 dark:bg-graphite-800">{profilePhotoPreviewUrl ? <img src={profilePhotoPreviewUrl} alt="Prévia da foto do motorista" className="h-full w-full object-cover" /> : <User className="h-8 w-8 text-graphite-400" />}</div><div className="flex flex-col gap-2"><div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => profilePhotoInputRef.current?.click()} disabled={loading}><Camera className="mr-1 h-4 w-4" />{profilePhoto ? 'Trocar foto' : 'Selecionar foto'}</Button>{profilePhoto && <Button type="button" size="sm" variant="ghost" onClick={clearProfilePhoto} disabled={loading}><Trash2 className="mr-1 h-4 w-4 text-error-icon" />Remover foto</Button>}</div><span className="text-xs text-graphite-500 dark:text-graphite-400">JPEG, PNG ou WEBP, até 10 MB. Você pode adicionar a foto depois.</span></div><input ref={profilePhotoInputRef} type="file" className="hidden" accept={PROFILE_PHOTO_MIME_TYPES.join(',')} onChange={(event) => selectProfilePhoto(event.target.files?.[0])} /></div></div>}
+ <div className="space-y-3"><div className="flex items-center gap-2 pb-2 border-b border-graphite-200 dark:border-graphite-800"><Camera className="w-4 h-4 text-success-icon " /><h3 className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">Foto do motorista (opcional)</h3></div><div className="flex flex-wrap items-center gap-3"><div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-graphite-200 bg-graphite-100 dark:border-graphite-700 dark:bg-graphite-800">{(profilePhotoPreviewUrl || existingPhotoUrl) ? <img src={profilePhotoPreviewUrl || existingPhotoUrl!} alt="Prévia da foto do motorista" className="h-full w-full object-cover" /> : <User className="h-8 w-8 text-graphite-400" />}</div><div className="flex flex-col gap-2"><div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => profilePhotoInputRef.current?.click()} disabled={loading}><Camera className="mr-1 h-4 w-4" />{(profilePhotoPreviewUrl || existingPhotoUrl) ? 'Trocar foto' : 'Selecionar foto'}</Button>{profilePhoto && <Button type="button" size="sm" variant="ghost" onClick={clearProfilePhoto} disabled={loading}><Trash2 className="mr-1 h-4 w-4 text-error-icon" />Remover foto</Button>}</div><span className="text-xs text-graphite-500 dark:text-graphite-400">JPEG, PNG ou WEBP, até 10 MB. Você pode adicionar a foto depois.</span></div><input ref={profilePhotoInputRef} type="file" className="hidden" accept={PROFILE_PHOTO_MIME_TYPES.join(',')} onChange={(event) => selectProfilePhoto(event.target.files?.[0])} /></div></div>
 
  <div className="space-y-4"><div className="flex items-center gap-2 pb-2 border-b border-graphite-200 dark:border-graphite-800"><CreditCard className="w-4 h-4 text-success-icon " /><h3 className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">2. Carteira Nacional de Habilitação (CNH)</h3></div>{driverToEdit && <DriverCnhPrefillButton driverId={driverToEdit.id} onApply={applyApprovedCnhDraft} />}<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
  <Input id="driver-cnhNumber" label="Número do Registro CNH" value={cnhNumber} onChange={(e) => { setCnhNumber(e.target.value); clearFieldError('cnhNumber'); }} required error={fieldErrors.cnhNumber} helperText="Pontuação é ignorada; serão usados apenas os números." />
@@ -410,7 +464,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  {driverToEdit && <Select label="Status Operacional" value={status} onChange={(e) => setStatus(e.target.value as DriverStatus)}><option value={DriverStatus.ACTIVE}>Ativo</option><option value={DriverStatus.INACTIVE}>Inativo</option><option value={DriverStatus.PENDING_DOCS}>Pendente de Docs</option><option value={DriverStatus.BLOCKED}>Bloqueado</option></Select>}
  </div>{!cnhEar && isCnhCompletion && <p className="text-xs text-warning-text ">A leitura da CNH não confirmou EAR. Selecione Sim ou Não para concluir o cadastro.</p>}</div>
 
- <div className="space-y-4"><div className="flex items-center gap-2 pb-2 border-b border-graphite-200 dark:border-graphite-800"><MapPin className="w-4 h-4 text-success-icon " /><h3 className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">3. Endereço {!requiresCompleteProfile && <span className="font-normal text-graphite-400">(opcional)</span>}</h3></div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+ <div className="space-y-4"><div className="flex items-center gap-2 pb-2 border-b border-graphite-200 dark:border-graphite-800"><MapPin className="w-4 h-4 text-success-icon " /><h3 className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">3. Endereço {!requiresCompleteProfile && <span className="font-normal text-graphite-400">(opcional)</span>}</h3></div>{driverToEdit && <DriverResidencePrefillButton driverId={driverToEdit.id} onApply={applyResidenceDraft} />}<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
  <Select id="driver-residenceType" label="Tipo de residência" value={residenceType} onChange={(e) => { setResidenceType(e.target.value as ResidenceType); clearFieldError('residenceType'); }} required={requiresCompleteProfile} error={fieldErrors.residenceType}><option value="">Selecione</option><option value="HOUSE">Casa</option><option value="APARTMENT">Apartamento</option><option value="OTHER">Outro</option></Select>
  {residenceType === 'OTHER' && <Input id="driver-residenceTypeOther" label="Qual tipo?" value={residenceTypeOther} onChange={(e) => { setResidenceTypeOther(e.target.value); clearFieldError('residenceTypeOther'); }} required={requiresCompleteProfile} error={fieldErrors.residenceTypeOther} />}
  <Input id="driver-zipCode" label="CEP" value={zipCode} onChange={(e) => { setZipCode(formatCep(e.target.value)); clearFieldError('zipCode'); setCepMessage(null); setHasUserChanges(true); }} onBlur={lookupCep} placeholder="00000-000" required={requiresCompleteProfile} error={fieldErrors.zipCode} helperText={cepLoading ? 'Consultando CEP...' : cepMessage || 'Ao informar o CEP, rua, bairro, cidade e UF serão preenchidos automaticamente.'} />
@@ -429,14 +483,14 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  <div className="sm:col-span-2"><Input label="Referência / observação do endereço" value={addressReference} onChange={(e) => setAddressReference(e.target.value)} /></div>
  </div></div>
 
- {requiresCompleteProfile && <div className="space-y-4"><div className="flex items-center gap-2 pb-2 border-b border-graphite-200 dark:border-graphite-800"><AlertCircle className="w-4 h-4 text-success-icon " /><h3 className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">4. Saúde e Contato de Emergência</h3></div><p className="text-xs text-graphite-500">Contato de emergência é obrigatório. Informações médicas são opcionais e ficam protegidas por permissão.</p><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+ {(requiresCompleteProfile || !!driverToEdit) && <div className="space-y-4"><div className="flex items-center gap-2 pb-2 border-b border-graphite-200 dark:border-graphite-800"><AlertCircle className="w-4 h-4 text-success-icon " /><h3 className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">4. Saúde e Contato de Emergência</h3></div><p className="text-xs text-graphite-500">{requiresCompleteProfile ? 'Contato de emergência é obrigatório. Informações médicas são opcionais e ficam protegidas por permissão.' : 'Informações médicas e contato de emergência protegidos por permissão.'}</p><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
  <Select label="Tipo sanguíneo (opcional)" value={bloodType} onChange={(e) => setBloodType(e.target.value)}><option value="">Não informado</option><option value="A+">A+</option><option value="A-">A-</option><option value="B+">B+</option><option value="B-">B-</option><option value="AB+">AB+</option><option value="AB-">AB-</option><option value="O+">O+</option><option value="O-">O-</option></Select>
  <div className="sm:col-span-2 lg:col-span-3"><Input label="Alergias (opcional)" value={allergies} onChange={(e) => setAllergies(e.target.value)} /></div>
  <div className="sm:col-span-2"><Input label="Condições de saúde relevantes (opcional)" value={relevantConditions} onChange={(e) => setRelevantConditions(e.target.value)} /></div>
  <div className="sm:col-span-2"><Input label="Medicamentos contínuos (opcional)" value={continuousMedications} onChange={(e) => setContinuousMedications(e.target.value)} /></div>
- <Input id="driver-emergencyContactName" label="Contato de emergência" value={emergencyContactName} onChange={(e) => { setEmergencyContactName(e.target.value); clearFieldError('emergencyContactName'); }} required error={fieldErrors.emergencyContactName} />
- <Input id="driver-emergencyContactRelationship" label="Parentesco / relação" value={emergencyContactRelationship} onChange={(e) => { setEmergencyContactRelationship(e.target.value); clearFieldError('emergencyContactRelationship'); }} required error={fieldErrors.emergencyContactRelationship} />
- <Input id="driver-emergencyContactPhone" label="Telefone de emergência" value={emergencyContactPhone} onChange={(e) => { setEmergencyContactPhone(formatPhone(e.target.value)); clearFieldError('emergencyContactPhone'); setHasUserChanges(true); }} placeholder="(15) 99742-4411" required error={fieldErrors.emergencyContactPhone} />
+ <Input id="driver-emergencyContactName" label="Contato de emergência" value={emergencyContactName} onChange={(e) => { setEmergencyContactName(e.target.value); clearFieldError('emergencyContactName'); }} required={requiresCompleteProfile} error={fieldErrors.emergencyContactName} />
+ <Input id="driver-emergencyContactRelationship" label="Parentesco / relação" value={emergencyContactRelationship} onChange={(e) => { setEmergencyContactRelationship(e.target.value); clearFieldError('emergencyContactRelationship'); }} required={requiresCompleteProfile} error={fieldErrors.emergencyContactRelationship} />
+ <Input id="driver-emergencyContactPhone" label="Telefone de emergência" value={emergencyContactPhone} onChange={(e) => { setEmergencyContactPhone(formatPhone(e.target.value)); clearFieldError('emergencyContactPhone'); setHasUserChanges(true); }} placeholder="(15) 99742-4411" required={requiresCompleteProfile} error={fieldErrors.emergencyContactPhone} />
  <div className="sm:col-span-2 lg:col-span-4"><Input label="Observação de emergência (opcional)" value={emergencyNotes} onChange={(e) => setEmergencyNotes(e.target.value)} /></div>
  </div></div>}
 

@@ -201,6 +201,13 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
  setIsDetailsOpen(true);
  };
 
+ const handleOpenEditFromDetails = (driver: Driver) => {
+ setIsDetailsOpen(false);
+ setCnhDraft(null);
+ setEditingDriver(driver);
+ setIsFormOpen(true);
+ };
+
  const handleOpenCnhRenewal = (driverId: string) => {
  setSelectedDriverId(driverId);
  setIsDetailsOpen(false);
@@ -574,6 +581,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
  onSelectVehicle={onSelectVehicle}
  onDriverUpdated={loadData}
  onRenewCnh={handleOpenCnhRenewal}
+ onEditDriver={handleOpenEditFromDetails}
  />}
  </Suspense>
  </LazyModuleErrorBoundary>

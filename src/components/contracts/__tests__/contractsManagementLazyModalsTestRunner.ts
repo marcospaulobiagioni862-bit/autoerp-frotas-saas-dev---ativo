@@ -95,7 +95,7 @@ assert.match(contractForm, /const SAVED_CONTRACT_KEY = \/\^modelo-contrato-/, 's
 assert.match(contractForm, /savedTemplates = templateList[\s\S]*contractTemplateGenerationMode\(item\) !== null/, 'new contract must use validated operational sources rather than a key family');
 assert.match(contractForm, /templateId: '', notes: ''/, 'new contract keeps template empty by default');
 assert.match(executionPanel, /if \(!contract\.templateId\)/, 'contract execution must require the model already persisted on the contract');
-assert.doesNotMatch(executionPanel, /ContractTemplateClient\.list\(\)/, 'contract execution must not reload or replace the model selected during contract creation');
+assert.match(executionPanel, /!contract\.templateId \? ContractTemplateClient\.list\(\) : Promise\.resolve\(\[\]\)/, 'contract execution must only load template list for recovery when contract lacks a template');
 assert.doesNotMatch(contractForm, /ContractTemplateClient\.ensureMoveFlexDefault\(\)/, 'new contract must not mix legacy master bootstrap into the saved-contract selector');
 assert.match(contractForm, /ContractTemplateClient\.list\(\)/, 'new contract must load operational templates before filtering to saved contracts');
 assert.match(contractForm, /Modelo de contrato \(opcional\)/, 'new contract template must be optional');
@@ -107,7 +107,7 @@ assert.doesNotMatch(contractForm, /ContractExecutionClient\.generatePdf\(savedCo
 assert.doesNotMatch(contractForm, /ContractExecutionClient\.generateDocx\(savedContract\.id/, 'creation must not generate document evidence automatically');
 assert.doesNotMatch(contractForm, /generatePdfFromDocx/, 'creation must not reflow the official Word layout');
 assert.match(executionPanel, /ContractExecutionClient\.generatePdf\(contract\.id\)/, 'contract execution must delegate official generation to the server-authoritative contract model');
-assert.doesNotMatch(executionPanel, /selectedTemplateId/, 'contract execution must not keep a second client-side template selection');
+assert.match(executionPanel, /!contract\.templateId && \([\s\S]*selectedTemplateId/, 'contract execution template selection must be guarded exclusively for unlinked template recovery');
 assert.doesNotMatch(executionPanel, /generatePdfFromDocx/, 'contract execution UI must not use the layout-losing DOCX-to-text PDF path');
 assert.doesNotMatch(source, /Ativar \/ Categoria|Faturar \/ Categoria/, 'V2 surface must remain free of legacy actions');
 assert.match(contractForm, /Segunda-feira/, 'weekly billing must offer Monday');

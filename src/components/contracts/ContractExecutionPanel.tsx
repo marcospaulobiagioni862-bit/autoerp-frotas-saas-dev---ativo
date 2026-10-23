@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Download, FileSignature, FileText, MessageSquare, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, FileSignature, FileText, Link2, MessageSquare, RefreshCw, ShieldCheck } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractClient } from '../../api/contractClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
@@ -29,6 +29,9 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
  const panelRef = useRef<HTMLDivElement | null>(null);
  const [artifacts, setArtifacts] = useState<ContractArtifact[]>([]);
  const [template, setTemplate] = useState<ContractTemplate | null>(null);
+ const [availableTemplates, setAvailableTemplates] = useState<ContractTemplate[]>([]);
+ const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+ const [linkingTemplate, setLinkingTemplate] = useState(false);
  const [loading, setLoading] = useState(false);
  const [error, setError] = useState<string | null>(null);
  const [success, setSuccess] = useState<string | null>(null);
@@ -49,14 +52,35 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
 
  const load = async () => {
  try {
- const [nextArtifacts, nextTemplate] = await Promise.all([
+ const [nextArtifacts, nextTemplate, templateList] = await Promise.all([
  ContractExecutionClient.listArtifacts(contract.id),
  contract.templateId ? ContractTemplateClient.get(contract.templateId) : Promise.resolve(null),
+ !contract.templateId ? ContractTemplateClient.list() : Promise.resolve([]),
  ]);
  setArtifacts(nextArtifacts);
  setTemplate(nextTemplate);
+ if (templateList.length > 0) {
+ setAvailableTemplates(templateList);
+ setSelectedTemplateId((current) => current || templateList[0]?.id || '');
+ }
  } catch (caught) {
  setError(caught instanceof Error ? caught.message : 'Erro ao carregar execução do contrato.');
+ }
+ };
+
+ const handleLinkTemplate = async () => {
+ if (!selectedTemplateId) return;
+ setLinkingTemplate(true);
+ setError(null);
+ try {
+ await ContractClient.update(contract.id, { templateId: selectedTemplateId });
+ setSuccess('Modelo vinculado com sucesso ao contrato!');
+ await onChanged();
+ await load();
+ } catch (caught) {
+ setError(caught instanceof Error ? caught.message : 'Não foi possível vincular o modelo.');
+ } finally {
+ setLinkingTemplate(false);
  }
  };
 
@@ -192,9 +216,49 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
  <div className="rounded-lg bg-graphite-50 p-3 text-xs dark:bg-graphite-900/50">
  <b>Modelo vinculado ao contrato</b>
  <div className="mt-1 text-graphite-500">
- {contract.templateId ? 'Definido no cadastro do contrato e protegido pelo servidor.' : 'Nenhum modelo vinculado.'}
+ {contract.templateId
+ ? (template ? `${template.title} • v${template.versionNumber} (Definido no cadastro e protegido pelo servidor)` : 'Definido no cadastro do contrato e protegido pelo servidor.')
+ : 'Nenhum modelo vinculado.'}
  </div>
  </div>
+
+ {!contract.templateId && (
+ <div className="rounded-lg bg-warning-bg border border-warning-border p-3 text-xs text-warning-text space-y-2">
+ <div className="font-semibold flex items-center gap-1.5">
+ <AlertCircle className="w-4 h-4 text-warning-icon" />
+ Vincular modelo para liberar geração e assinatura
+ </div>
+ <p className="text-[11px] text-graphite-600 dark:text-graphite-300">
+ Este contrato foi salvo sem modelo vinculado. Selecione um modelo ativo abaixo para gerar o documento e colher a assinatura:
+ </p>
+ <div className="flex flex-col sm:flex-row gap-2 pt-1">
+ <select
+ value={selectedTemplateId}
+ onChange={(e) => setSelectedTemplateId(e.target.value)}
+ className="control text-xs flex-1 bg-white dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100"
+ disabled={linkingTemplate}
+ >
+ <option value="">Selecione um modelo...</option>
+ {availableTemplates.map((t) => (
+ <option key={t.id} value={t.id}>
+ {t.title} • v{t.versionNumber}
+ </option>
+ ))}
+ </select>
+ <Button
+ type="button"
+ size="sm"
+ variant="primary"
+ disabled={!selectedTemplateId || linkingTemplate}
+ isLoading={linkingTemplate}
+ onClick={handleLinkTemplate}
+ >
+ <Link2 className="w-3.5 h-3.5 mr-1" />
+ Vincular modelo
+ </Button>
+ </div>
+ </div>
+ )}
  {generated ? (
  <div className="space-y-2 text-xs">
  <div className="rounded-lg bg-graphite-50 p-2 dark:bg-graphite-900/50">

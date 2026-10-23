@@ -122,6 +122,12 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  setVehicles(validVehicles);
  setDrivers(validDrivers);
  setTemplates(selectableTemplates);
+ if (!contractToEdit && selectableTemplates.length > 0) {
+ setForm((current) => ({
+ ...current,
+ templateId: current.templateId || selectableTemplates[0].id,
+ }));
+ }
  const pending = (Array.isArray(allManagementTemplates) ? allManagementTemplates : []).filter((item) =>
  item.isCurrent && item.isActive && !item.isArchived && contractTemplateGenerationMode(item) === null
  );
@@ -209,6 +215,9 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  if(form.billingPeriodicity===RecurringFrequency.WEEKLY&&(!form.billingDueDayOfWeek||Number(form.billingDueDayOfWeek)<1||Number(form.billingDueDayOfWeek)>7))nextErrors.billingDueDayOfWeek='Informe o dia semanal entre 1 e 7.';
  if(form.billingPeriodicity&&form.billingPeriodicity!==RecurringFrequency.WEEKLY&&(!form.billingDueDayOfMonth||Number(form.billingDueDayOfMonth)<1||Number(form.billingDueDayOfMonth)>31))nextErrors.billingDueDayOfMonth='Informe o dia do vencimento entre 1 e 31.';
  if(form.endDate&&form.startDate&&form.startDate>form.endDate)nextErrors.endDate='A data final não pode ser anterior à data inicial.';
+ if (templates.length > 0 && !form.templateId && !contractFile && !contractToEdit?.templateId) {
+ nextErrors.templateId = 'Selecione um modelo de contrato para geração ou envie um PDF de contrato assinado.';
+ }
  setFieldErrors(nextErrors);
  if(Object.keys(nextErrors).length){setError('Corrija os campos destacados em vermelho antes de salvar o contrato.');return;}
  setLoading(true);
@@ -281,15 +290,15 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  {error && <div className="flex gap-2 rounded-xl border border-error-border bg-error-bg p-3 text-xs text-error-text"><AlertCircle className="w-4 h-4" />{error}</div>}
  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
  <Field label="Número do contrato"><Input value={form.contractNumber} disabled placeholder="Gerado automaticamente ao salvar" /></Field>
- <Field label="Modelo de contrato (opcional)">
+ <Field label={templates.length > 0 ? "Modelo de contrato *" : "Modelo de contrato (opcional)"} error={fieldErrors.templateId}>
  <select
  id="contract-template-select"
  value={form.templateId}
  onChange={(e) => set('templateId', e.target.value)}
  disabled={loadingOptions}
- className="control"
+ className={`control ${fieldErrors.templateId ? 'border-error-border' : ''}`}
  >
- <option value="">Sem modelo</option>
+ <option value="">{templates.length > 0 ? 'Selecione o modelo do contrato...' : 'Sem modelo'}</option>
  {templates.map((item) => (
  <option key={item.id} value={item.id}>
  {contractTemplateOptionLabel(item)}

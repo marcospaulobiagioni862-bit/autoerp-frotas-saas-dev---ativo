@@ -792,11 +792,14 @@ jobs:
         run: npx tsx src/components/finance/__tests__/transactionFiltersTestRunner.ts
 
       - name: Deferred driver modals regression
-        run: npx tsx src/components/drivers/__tests__/driversManagementLazyModalsTestRunner.ts
+        run: |
+          npx tsx src/components/drivers/__tests__/driversManagementLazyModalsTestRunner.ts
+          npx tsx src/components/drivers/__tests__/driverEditCompleteProfileRegression.ts
 
       - name: Deferred contract modals regression
         run: |
           npx tsx src/components/contracts/__tests__/contractsManagementLazyModalsTestRunner.ts
+          npx tsx src/components/contracts/__tests__/contractTemplateEnforcementRegression.ts
           npx tsx src/components/contracts/__tests__/moveflexBaseContractPdfTestRunner.ts
           npx tsx src/api/__tests__/contractExecutionClientTestRunner.ts
 
