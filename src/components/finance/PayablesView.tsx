@@ -16,7 +16,8 @@ import { CreditCard, Search, Filter, X, Plus } from 'lucide-react';
 import { AttachmentModal } from '../documents/AttachmentModal';
 import { FinancialObligationDetailsModal } from './FinancialObligationDetailsModal';
 import { FolderOpen } from 'lucide-react';
-import { Card, Button, Badge, Input, Skeleton, ModalContainer, ConfirmDialog } from '../ui';
+import { Card, Button, Badge, Input, Skeleton, ModalContainer, ConfirmDialog, CurrencyInput } from '../ui';
+import { parseCurrencyDraft } from '../../shared/utils/currency';
 import { firstUnpaidPreviousInstallment, payableInstallmentOrderMessage } from '../../domain/finance/payableInstallmentOrder';
 
 interface PayablesViewProps {
@@ -129,8 +130,9 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
 
  const handleCreatePayable = async (e: React.FormEvent) => {
  e.preventDefault();
- if (!description.trim() || !totalAmount || !dueDate || !categoryId) {
- alert('Por favor, preencha todos os campos obrigatórios.');
+ const parsedTotal = parseCurrencyDraft(totalAmount);
+ if (!description.trim() || !parsedTotal || parsedTotal <= 0 || !dueDate || !categoryId) {
+ alert('Por favor, preencha todos os campos obrigatórios com um valor válido.');
  return;
  }
  setCreateLoading(true);
@@ -140,7 +142,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
  originId: 'manual-' + Date.now(),
  categoryId,
  description,
- totalAmount: parseFloat(totalAmount),
+ totalAmount: parsedTotal,
  dueDate,
  competenceDate: competenceDate || dueDate,
  competenceMode,
@@ -461,13 +463,10 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
  />
 
  <div className="grid grid-cols-2 gap-4">
- <Input
- label="Valor Total (R$) *"
- type="number"
- step="0.01"
+ <CurrencyInput
+ label="Valor Total *"
  value={totalAmount}
- onChange={(e) => setTotalAmount(e.target.value)}
- placeholder="0.00"
+ onChangeValue={(_, formatted) => setTotalAmount(formatted)}
  required
  />
 

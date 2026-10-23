@@ -9,6 +9,7 @@ import { ModalContainer } from '../ui/ModalContainer';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
+import { CurrencyInput } from '../ui/CurrencyInput';
 import { AlertCircle } from 'lucide-react';
 
 interface VehicleFormModalProps {
@@ -514,9 +515,9 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
  <div className="p-3 bg-graphite-50 dark:bg-graphite-800/40 rounded-xl space-y-3 border border-graphite-200 dark:border-graphite-800">
  <h4 className="text-xs font-bold text-graphite-700 dark:text-graphite-300 uppercase tracking-wider">Valores Financeiros</h4>
  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
- <Input label="Valor de Aquisição (R$) *" type="number" required value={formData.acquisitionValue} onChange={(e) => handleNumericChange('acquisitionValue', e.target.value)} />
- <Input label="Valor Comercial Atual (R$) *" type="number" required value={formData.currentValue} onChange={(e) => handleNumericChange('currentValue', e.target.value)} />
- <Input label="Valor Aluguel Semanal de Referência (R$) *" type="number" required value={formData.rentalValueBase} onChange={(e) => handleNumericChange('rentalValueBase', e.target.value)} />
+ <CurrencyInput label="Valor de Aquisição *" required value={formData.acquisitionValue} onChangeValue={(numeric) => handleChange('acquisitionValue', numeric || '')} />
+ <CurrencyInput label="Valor Comercial Atual *" required value={formData.currentValue} onChangeValue={(numeric) => handleChange('currentValue', numeric || '')} />
+ <CurrencyInput label="Valor Aluguel Semanal de Referência *" required value={formData.rentalValueBase} onChangeValue={(numeric) => handleChange('rentalValueBase', numeric || '')} />
  </div>
  {/* PH-073. O Marcos procurou aqui a periodicidade e o dia de vencimento da cobranca.
  Eles existem, mas no contrato do motorista (billing_periodicity, billing_due_day_of_week

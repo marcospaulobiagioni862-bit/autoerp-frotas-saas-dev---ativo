@@ -1,7 +1,8 @@
 import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
 import React, { useEffect, useState, useRef } from 'react';
 import { AlertCircle, FileText, Save, X } from 'lucide-react';
-import { Button, Input, ModalContainer } from '../ui';
+import { Button, Input, ModalContainer, CurrencyInput } from '../ui';
+import { numberToCurrencyDraft, parseCurrencyDraft } from '../../shared/utils/currency';
 import { ContractClient } from '../../api/contractClient';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DriverClient } from '../../api/driverClient';
@@ -143,13 +144,13 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  driverId: contractToEdit.driverId,
  startDate: contractToEdit.startDate,
  endDate: contractToEdit.endDate || '',
- rentalAmount: String(contractToEdit.rentalAmount),
+ rentalAmount: numberToCurrencyDraft(contractToEdit.rentalAmount),
  billingPeriodicity: contractToEdit.billingPeriodicity,
  billingDueDayOfWeek: String(contractToEdit.billingDueDayOfWeek || 1),
  billingDueDayOfMonth: String(contractToEdit.billingDueDayOfMonth || 1),
- securityDepositAmount: String(contractToEdit.securityDepositAmount),
+ securityDepositAmount: numberToCurrencyDraft(contractToEdit.securityDepositAmount),
  franchiseKm: String(contractToEdit.franchiseKm),
- excessKmRate: String(contractToEdit.excessKmRate),
+ excessKmRate: numberToCurrencyDraft(contractToEdit.excessKmRate),
  paymentMethodId: contractToEdit.paymentMethodId || '',
  templateId: contractToEdit.templateId || '',
  notes: contractToEdit.notes || '',
@@ -203,7 +204,8 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  if(!form.driverId)nextErrors.driverId='Selecione o motorista.';
  if(!form.startDate)nextErrors.startDate='Informe a data inicial.';
  if(!form.billingPeriodicity)nextErrors.billingPeriodicity='Selecione a periodicidade.';
- if(!Number.isFinite(Number(form.rentalAmount))||Number(form.rentalAmount)<=0)nextErrors.rentalAmount='Informe um aluguel maior que zero.';
+ const rentalNum = parseCurrencyDraft(form.rentalAmount);
+ if (!Number.isFinite(rentalNum) || rentalNum <= 0) nextErrors.rentalAmount = 'Informe um aluguel maior que zero.';
  if(form.billingPeriodicity===RecurringFrequency.WEEKLY&&(!form.billingDueDayOfWeek||Number(form.billingDueDayOfWeek)<1||Number(form.billingDueDayOfWeek)>7))nextErrors.billingDueDayOfWeek='Informe o dia semanal entre 1 e 7.';
  if(form.billingPeriodicity&&form.billingPeriodicity!==RecurringFrequency.WEEKLY&&(!form.billingDueDayOfMonth||Number(form.billingDueDayOfMonth)<1||Number(form.billingDueDayOfMonth)>31))nextErrors.billingDueDayOfMonth='Informe o dia do vencimento entre 1 e 31.';
  if(form.endDate&&form.startDate&&form.startDate>form.endDate)nextErrors.endDate='A data final não pode ser anterior à data inicial.';
@@ -218,13 +220,13 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  driverId: form.driverId,
  startDate: form.startDate,
  endDate: form.endDate || undefined,
- rentalAmount: Number(form.rentalAmount),
+ rentalAmount: rentalNum,
  billingPeriodicity: form.billingPeriodicity as RecurringFrequency,
  billingDueDayOfWeek: form.billingPeriodicity === RecurringFrequency.WEEKLY ? Number(form.billingDueDayOfWeek) : undefined,
  billingDueDayOfMonth: form.billingPeriodicity !== RecurringFrequency.WEEKLY ? Number(form.billingDueDayOfMonth) : undefined,
- securityDepositAmount: Number(form.securityDepositAmount || 0),
+ securityDepositAmount: parseCurrencyDraft(form.securityDepositAmount) || 0,
  franchiseKm: Number(form.franchiseKm || 0),
- excessKmRate: Number(form.excessKmRate || 0),
+ excessKmRate: parseCurrencyDraft(form.excessKmRate) || 0,
  paymentMethodId: form.paymentMethodId || undefined,
  templateId: form.templateId || undefined,
  notes: form.notes || undefined,
@@ -348,13 +350,13 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  {noDriversForNewContract && <span role="status" className="block text-[11px] font-normal text-warning-text ">Todos os motoristas ativos possuem vínculo contratual vigente ou estão indisponíveis.</span>}
  </Field>
  <Field label="Data final"><Input type="date" value={form.endDate} error={fieldErrors.endDate} onChange={(e) => set('endDate', e.target.value)} /></Field>
- <Field label="Aluguel *"><Input type="number" min="0.01" step="0.01" value={form.rentalAmount} error={fieldErrors.rentalAmount} onChange={(e) => set('rentalAmount', e.target.value)} /></Field>
+ <Field label="Aluguel *" error={fieldErrors.rentalAmount}><CurrencyInput value={form.rentalAmount} onChangeValue={(_, formatted) => set('rentalAmount', formatted)} placeholder="0,00" /></Field>
  <Field label="Periodicidade *" error={fieldErrors.billingPeriodicity}><select value={form.billingPeriodicity} onChange={(e) => setBillingPeriodicity(e.target.value)} className={`control ${fieldErrors.billingPeriodicity?'border-error-border':''}`}><option value="">Selecione</option>{Object.values(RecurringFrequency).map((v) => <option key={v} value={v}>{v === RecurringFrequency.WEEKLY ? 'Semanal' : v === RecurringFrequency.MONTHLY ? 'Mensal' : v === RecurringFrequency.QUARTERLY ? 'Trimestral' : v === RecurringFrequency.SEMI_ANNUAL ? 'Semestral' : 'Anual'}</option>)}</select></Field>
  {form.billingPeriodicity === RecurringFrequency.WEEKLY && <Field label="Dia semanal *" error={fieldErrors.billingDueDayOfWeek}><select value={form.billingDueDayOfWeek} onChange={(e) => set('billingDueDayOfWeek', e.target.value)} className={`control ${fieldErrors.billingDueDayOfWeek?'border-error-border':''}`}><option value="">Selecione</option><option value="1">Segunda-feira</option><option value="2">Terça-feira</option><option value="3">Quarta-feira</option><option value="4">Quinta-feira</option><option value="5">Sexta-feira</option><option value="6">Sábado</option><option value="7">Domingo</option></select></Field>}
  {form.billingPeriodicity && form.billingPeriodicity !== RecurringFrequency.WEEKLY && <Field label="Dia do vencimento no mês *"><Input type="number" min="1" max="31" value={form.billingDueDayOfMonth} error={fieldErrors.billingDueDayOfMonth} onChange={(e) => set('billingDueDayOfMonth', e.target.value)} /></Field>}
- <Field label="Caução"><Input type="number" min="0" step="0.01" value={form.securityDepositAmount} onChange={(e) => set('securityDepositAmount', e.target.value)} /></Field>
+ <Field label="Caução"><CurrencyInput value={form.securityDepositAmount} onChangeValue={(_, formatted) => set('securityDepositAmount', formatted)} placeholder="0,00" /></Field>
  <Field label="Franquia KM"><Input type="number" min="0" value={form.franchiseKm} onChange={(e) => set('franchiseKm', e.target.value)} /></Field>
- <Field label="KM excedente"><Input type="number" min="0" step="0.01" value={form.excessKmRate} onChange={(e) => set('excessKmRate', e.target.value)} /></Field>
+ <Field label="KM excedente"><CurrencyInput value={form.excessKmRate} onChangeValue={(_, formatted) => set('excessKmRate', formatted)} placeholder="0,00" /></Field>
  <Field label="Forma de pagamento"><Input value={form.paymentMethodId} onChange={(e) => set('paymentMethodId', e.target.value)} placeholder="Opcional" /></Field>
  </div>
  <Field label="Observações"><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="control" /></Field>

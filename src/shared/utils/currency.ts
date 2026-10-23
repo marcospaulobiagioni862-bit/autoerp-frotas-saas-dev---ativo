@@ -32,6 +32,11 @@ export function parseCurrencyInput(value: string): number {
 /** Editable decimal draft: keep empty input and cents, without forcing a leading zero. */
 export function normalizeCurrencyDraft(value: string): string | null {
   const draft = value.trim();
+  if (!draft) return '';
+  if (/^\d{1,3}(?:\.\d{3})*(?:,\d{0,2})?$/.test(draft)) {
+    const withoutThousands = draft.replace(/\./g, '');
+    return withoutThousands.replace(/^0+(?=\d)/, '');
+  }
   if (!/^\d*(?:[.,]\d{0,2})?$/.test(draft)) return null;
   return draft.replace(/^0+(?=\d)/, '').replace('.', ',');
 }
@@ -45,7 +50,7 @@ export function parseCurrencyDraft(value: string): number {
 /**
  * Currency mask for operational money fields.
  * Digits are treated as cents so operators do not need a decimal separator:
- * 500 -> 5,00; 200 -> 2,00; 1000 -> 10,00.
+ * 500 -> 5,00; 200 -> 2,00; 1000 -> 10,00; 250000 -> 2.500,00.
  * Pasted values with separators also normalize correctly (5,00 -> 5,00).
  */
 export function normalizeCurrencyCentsDraft(value: string): string {
@@ -54,9 +59,17 @@ export function normalizeCurrencyCentsDraft(value: string): string {
 
   const significant = digits.replace(/^0+(?=\d)/, '');
   const padded = significant.padStart(3, '0');
-  const integerPart = padded.slice(0, -2).replace(/^0+(?=\d)/, '') || '0';
+  const rawInteger = padded.slice(0, -2).replace(/^0+(?=\d)/, '') || '0';
+  const integerPart = rawInteger.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   const cents = padded.slice(-2);
   return `${integerPart},${cents}`;
+}
+
+/** Converts a numeric amount to a BRL draft string with cents shift format (e.g., 2500 -> '2.500,00', 0.6 -> '0,60'). */
+export function numberToCurrencyDraft(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || !Number.isFinite(amount)) return '';
+  const centsTotal = Math.round(amount * 100);
+  return normalizeCurrencyCentsDraft(String(centsTotal));
 }
 
 /**

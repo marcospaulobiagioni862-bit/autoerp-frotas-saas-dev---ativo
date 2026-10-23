@@ -13,10 +13,10 @@ import { formatDateBR, getCurrentISODate } from '../../shared/utils/date';
 import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import { WhatsappClient } from '../../api/whatsappClient';
-import { roundCurrency } from '../../shared/utils/currency';
+import { roundCurrency, parseCurrencyDraft } from '../../shared/utils/currency';
 import { TrendingUp, Search, Filter, RefreshCw, X, Plus, MessageSquare } from 'lucide-react';
 import { FinancialObligationDetailsModal } from './FinancialObligationDetailsModal';
-import { Card, Button, Badge, Input, ConfirmDialog, Skeleton, ModalContainer } from '../ui';
+import { Card, Button, Badge, Input, ConfirmDialog, Skeleton, ModalContainer, CurrencyInput } from '../ui';
 
 interface ReceivablesViewProps {
  onOpenReceiptModal: (receivable: AccountReceivable) => void;
@@ -101,7 +101,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
  const formDraft = useLocalFormDraft('finance-receivables-new', { description, totalAmount, dueDate, competenceDate, competenceMode, installmentCompetenceDates, categoryId, installmentsCount, driverId, vehicleId, contractId, otherCategoryName }, draft => { setDescription(draft.description); setTotalAmount(draft.totalAmount); setDueDate(draft.dueDate); setCompetenceDate(draft.competenceDate); setCompetenceMode(draft.competenceMode); setInstallmentCompetenceDates(draft.installmentCompetenceDates); setCategoryId(draft.categoryId); setInstallmentsCount(draft.installmentsCount); setDriverId(draft.driverId); setVehicleId(draft.vehicleId); setContractId(draft.contractId); setOtherCategoryName(draft.otherCategoryName); }, isCreateOpen);
 
  const preview = useMemo(
- () => installmentPreview(Number(totalAmount), Math.max(1, Number.parseInt(installmentsCount, 10) || 1), dueDate),
+ () => installmentPreview(parseCurrencyDraft(totalAmount) || 0, Math.max(1, Number.parseInt(installmentsCount, 10) || 1), dueDate),
  [totalAmount, installmentsCount, dueDate]
  );
 
@@ -183,7 +183,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
 
  const handleCreateReceivable = async (event: React.FormEvent) => {
  event.preventDefault();
- const total = Number(totalAmount);
+ const total = parseCurrencyDraft(totalAmount);
  const installments = Math.max(1, Number.parseInt(installmentsCount, 10) || 1);
  if (!description.trim() || !Number.isFinite(total) || total <= 0 || !dueDate || !categoryId || !driverId) {
  alert('Preencha motorista/responsável, descrição, valor maior que zero, vencimento e categoria.');
@@ -348,7 +348,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
  <form data-draft-dirty={formDraft.dirty} onSubmit={handleCreateReceivable} className="space-y-4">
  {manualOptionsError && <div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text">{manualOptionsError}</div>}
  <Input label="Descrição da cobrança *" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex: Mensalidade avulsa, cobrança de sinistro..." required />
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Valor Total (R$) *" type="number" min="0.01" step="0.01" value={totalAmount} onChange={(event) => setTotalAmount(event.target.value)} required /><Input label="Primeiro vencimento *" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></div>
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><CurrencyInput label="Valor Total *" value={totalAmount} onChangeValue={(_, formatted) => setTotalAmount(formatted)} required /><Input label="Primeiro vencimento *" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></div>
  <InstallmentCompetenceFields count={Number(installmentsCount)} baseDate={competenceDate || dueDate} mode={competenceMode} dates={installmentCompetenceDates} onMode={setCompetenceMode} onDates={setInstallmentCompetenceDates} />
 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Data de Competência" type="date" value={competenceDate} onChange={(event) => setCompetenceDate(event.target.value)} /><Input label="Parcelas" type="number" min="1" max="120" value={installmentsCount} onChange={(event) => { setInstallmentsCount(event.target.value); setInstallmentCompetenceDates([]); }} /></div>
 

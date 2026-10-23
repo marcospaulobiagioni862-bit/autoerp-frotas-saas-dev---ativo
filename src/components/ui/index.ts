@@ -7,4 +7,5 @@ export * from './ModalContainer';
 export * from './ConfirmDialog';
 export * from './Skeleton';
 export * from './PageHeader';
+export * from './CurrencyInput';
 
