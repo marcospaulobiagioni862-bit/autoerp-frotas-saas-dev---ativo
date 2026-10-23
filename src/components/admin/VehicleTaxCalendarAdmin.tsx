@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock, Zap } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
@@ -23,6 +23,7 @@ export function VehicleTaxCalendarAdmin(): React.ReactElement {
   const [year, setYear] = useState(currentYear);
   const [entries, setEntries] = useState<VehicleTaxCalendarEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [applyingPreset, setApplyingPreset] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const [digit, setDigit] = useState('0');
@@ -43,6 +44,21 @@ export function VehicleTaxCalendarAdmin(): React.ReactElement {
   };
 
   useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [uf, year]);
+
+  const aplicarPresetSp = async () => {
+    setMessage(null);
+    setApplyingPreset(true);
+    try {
+      const res = await VehicleTaxCalendarClient.applyOfficialSpPreset(year, 'SP');
+      setMessage(`Calendário oficial de SP para ${year} aplicado com sucesso! (${res.appliedCount} vencimentos configurados para todos os dígitos)`);
+      if (uf !== 'SP') setUf('SP');
+      await load();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Não foi possível aplicar o calendário oficial de SP.');
+    } finally {
+      setApplyingPreset(false);
+    }
+  };
 
   const salvar = async () => {
     setMessage(null);
@@ -68,15 +84,27 @@ export function VehicleTaxCalendarAdmin(): React.ReactElement {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <CalendarClock className="w-5 h-5 text-action-primary" />
-        <div>
-          <h3 className="text-sm font-bold">Calendário de IPVA e Licenciamento</h3>
-          <p className="text-[11px] text-graphite-500">
-            Digite as datas do calendário oficial da Sefaz, por final de placa. Elas aparecem sozinhas na ficha
-            de cada veículo com aquele final.
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="w-5 h-5 text-action-primary" />
+          <div>
+            <h3 className="text-sm font-bold">Calendário de IPVA e Licenciamento</h3>
+            <p className="text-[11px] text-graphite-500">
+              Digite as datas do calendário oficial da Sefaz ou aplique a tabela oficial de SP por final de placa.
+            </p>
+          </div>
         </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => { void aplicarPresetSp(); }}
+          disabled={applyingPreset || loading}
+          className="flex items-center gap-1.5"
+        >
+          <Zap className="w-3.5 h-3.5 text-warning-text" />
+          {applyingPreset ? 'Aplicando Tabela SP...' : `Aplicar Tabela Oficial SP (${year})`}
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">

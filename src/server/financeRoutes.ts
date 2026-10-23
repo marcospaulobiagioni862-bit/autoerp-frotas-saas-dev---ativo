@@ -522,15 +522,107 @@ export function registerFinanceRoutes(app: Express): void {
         if (!accountRepo.findAll || !paymentMethodRepo) {
           throw new Error('Settlement repositories unavailable');
         }
-        const accounts = await accountRepo.findAll();
-        const paymentMethods = await paymentMethodRepo.findAll();
+        let accounts = await accountRepo.findAll();
+        let activeAccounts = accounts.filter((item: any) => item.status === 'ACTIVE');
+
+        // PH-087: Auto-bootstrap default account if tenant has none active
+        if (activeAccounts.length === 0) {
+          const defaultAccount = await accountRepo.create({
+            id: `acc-default-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            companyId: principal.companyId,
+            name: 'Caixa Geral',
+            type: 'CASH',
+            status: 'ACTIVE',
+            initialBalance: '0',
+            currentBalance: '0',
+          });
+          activeAccounts = [defaultAccount];
+        }
+
+        let paymentMethods = await paymentMethodRepo.findAll();
+        let activePaymentMethods = paymentMethods.filter((item: any) => item.active !== false);
+
+        // PH-087: Auto-bootstrap standard payment methods if tenant has none active
+        if (activePaymentMethods.length === 0) {
+          const standardMethods = [
+            { id: `pm-pix-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, companyId: principal.companyId, name: 'PIX', type: 'PIX', active: true, feePercentage: '0' },
+            { id: `pm-ted-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, companyId: principal.companyId, name: 'Transferência TED/DOC', type: 'TRANSFER', active: true, feePercentage: '0' },
+            { id: `pm-bol-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, companyId: principal.companyId, name: 'Boleto Bancário', type: 'BOLETO', active: true, feePercentage: '0' },
+            { id: `pm-cc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, companyId: principal.companyId, name: 'Cartão de Crédito', type: 'CREDIT_CARD', active: true, feePercentage: '0' },
+            { id: `pm-cash-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, companyId: principal.companyId, name: 'Dinheiro', type: 'CASH', active: true, feePercentage: '0' },
+          ];
+          for (const method of standardMethods) {
+            await paymentMethodRepo.create(method);
+          }
+          activePaymentMethods = standardMethods;
+        }
+
         return {
-          accounts: accounts.filter((item: any) => item.status === 'ACTIVE'),
-          paymentMethods: paymentMethods.filter((item: any) => item.active !== false),
+          accounts: activeAccounts,
+          paymentMethods: activePaymentMethods,
         };
       });
       res.json(options);
     } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  // PH-087: Criação rápida inline de conta financeira no fluxo de baixa
+  app.post('/api/finance/settlement-options/quick-account', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    if (!name) {
+      res.status(400).json({ error: 'Nome da conta financeira é obrigatório' });
+      return;
+    }
+
+    const allowedTypes = ['CASH', 'CHECKING', 'SAVINGS', 'INVESTMENT'];
+    const rawType = typeof req.body?.type === 'string' ? req.body.type.trim().toUpperCase() : 'CASH';
+    const type = allowedTypes.includes(rawType) ? rawType : 'CASH';
+
+    const initialBalance = typeof req.body?.initialBalance === 'number' && Number.isFinite(req.body.initialBalance)
+      ? req.body.initialBalance
+      : typeof req.body?.initialBalance === 'string'
+        ? Number(req.body.initialBalance.replace(',', '.')) || 0
+        : 0;
+
+    try {
+      const account = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const accountRepo = txContext.getAccountRepo();
+        if (!accountRepo.findAll || !accountRepo.create) {
+          throw new Error('Settlement repositories unavailable');
+        }
+
+        const existingAccounts = await accountRepo.findAll();
+        const duplicate = existingAccounts.find(
+          (a: any) => a.name.trim().toLowerCase() === name.toLowerCase() && a.status === 'ACTIVE'
+        );
+        if (duplicate) {
+          throw new Error('DUPLICATE_ACCOUNT_NAME');
+        }
+
+        const newAccount = await accountRepo.create({
+          id: `acc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          companyId: principal.companyId,
+          name,
+          type,
+          status: 'ACTIVE',
+          initialBalance: String(initialBalance),
+          currentBalance: String(initialBalance),
+        });
+
+        return newAccount;
+      });
+
+      res.status(201).json({ account });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'DUPLICATE_ACCOUNT_NAME') {
+        res.status(409).json({ error: 'Já existe uma conta ativa com este nome.' });
+        return;
+      }
       sendFinanceCommandError(res, error);
     }
   });

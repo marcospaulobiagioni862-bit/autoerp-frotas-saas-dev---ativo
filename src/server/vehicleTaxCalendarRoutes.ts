@@ -12,8 +12,45 @@ function requirePrincipal(req: Request, res: Response): AuthenticatedPrincipal |
   return actor;
 }
 
+function requireAdminOrFleetManager(req: Request, res: Response): AuthenticatedPrincipal | null {
+  const actor = requirePrincipal(req, res);
+  if (!actor) return null;
+  const role = String(actor.role || '').toUpperCase();
+  const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
+  if (role !== 'ADMIN' && !permissions.includes('*') && !permissions.includes('VEHICLE_TAX_CALENDAR_MANAGE')) {
+    res.status(403).json({ error: 'FORBIDDEN' });
+    return null;
+  }
+  return actor;
+}
+
+function requirePayableCreator(req: Request, res: Response): AuthenticatedPrincipal | null {
+  const actor = requirePrincipal(req, res);
+  if (!actor) return null;
+  const role = String(actor.role || '').toUpperCase();
+  const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
+  if (role !== 'ADMIN' && !permissions.includes('*') && !permissions.includes('PAYABLE_MUTATE') && !permissions.includes('PAYABLE_CREATE')) {
+    res.status(403).json({ error: 'FORBIDDEN' });
+    return null;
+  }
+  return actor;
+}
+
 function fail(res: Response, error: unknown): void {
-  if (error instanceof VehicleTaxCalendarValidationError) { res.status(400).json({ error: 'VEHICLE_TAX_CALENDAR_INVALID' }); return; }
+  if (error instanceof VehicleTaxCalendarValidationError) {
+    res.status(400).json({ error: error.message || 'VEHICLE_TAX_CALENDAR_INVALID' });
+    return;
+  }
+  if (error instanceof Error) {
+    if (error.message === 'DUPLICATE_TAX_PAYABLES') {
+      res.status(409).json({ error: 'Já existem títulos de IPVA gerados para este veículo no ano informado.' });
+      return;
+    }
+    if (error.message === 'VEHICLE_NOT_FOUND') {
+      res.status(404).json({ error: 'Veículo não encontrado' });
+      return;
+    }
+  }
   res.status(500).json({ error: 'INTERNAL_ERROR' });
 }
 
@@ -39,11 +76,46 @@ export function registerVehicleTaxCalendarRoutes(app: Express): void {
     } catch (error) { fail(res, error); }
   });
 
+  // PH-091: Guarda 403 Forbidden para não-ADMIN no cadastro manual do calendário
   app.post('/api/vehicle-tax-calendar', async (req, res) => {
-    const actor = requirePrincipal(req, res); if (!actor) return;
+    const actor = requireAdminOrFleetManager(req, res); if (!actor) return;
     try {
       const item = await VehicleTaxCalendarAuthority.upsert(actor.companyId, actor.userId, req.body || {});
       res.status(201).json({ item });
+    } catch (error) { fail(res, error); }
+  });
+
+  // PH-091: Aplicação em lote da tabela oficial de SP (calculada dinamicamente, sem datas hardcoded)
+  app.post('/api/vehicle-tax-calendar/preset', async (req, res) => {
+    const actor = requireAdminOrFleetManager(req, res); if (!actor) return;
+    try {
+      const uf = String(req.body?.uf || 'SP').trim().toUpperCase();
+      if (uf !== 'SP') {
+        res.status(400).json({ error: 'Atualmente o preset oficial é suportado apenas para UF = SP' });
+        return;
+      }
+      const year = Number(req.body?.referenceYear || new Date().getFullYear());
+      const result = await VehicleTaxCalendarAuthority.applyOfficialSpPreset(actor.companyId, actor.userId, year);
+      res.status(201).json(result);
+    } catch (error) { fail(res, error); }
+  });
+
+  // PH-091: Geração de contas a pagar de IPVA (Cota Única ou Parcelado) a partir do calendário oficial
+  app.post('/api/vehicle-tax-calendar/vehicle/:vehicleId/generate-payables', async (req, res) => {
+    const actor = requirePayableCreator(req, res); if (!actor) return;
+    try {
+      const vehicleId = String(req.params.vehicleId || '');
+      const referenceYear = Number(req.body?.referenceYear);
+      const taxType = req.body?.taxType;
+      const totalAmount = Number(req.body?.totalAmount);
+
+      const result = await VehicleTaxCalendarAuthority.generatePayablesForVehicle(actor.companyId, actor, {
+        vehicleId,
+        referenceYear,
+        taxType,
+        totalAmount,
+      });
+      res.status(201).json(result);
     } catch (error) { fail(res, error); }
   });
 }

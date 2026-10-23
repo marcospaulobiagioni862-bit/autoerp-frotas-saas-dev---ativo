@@ -56,4 +56,26 @@ export class VehicleTaxCalendarClient {
     });
     return body.item as VehicleTaxCalendarEntry;
   }
+
+  static async applyOfficialSpPreset(referenceYear: number, uf = 'SP'): Promise<{ appliedCount: number; referenceYear: number }> {
+    invalidateCache('vehicle-tax-calendar');
+    const body = await request('/api/vehicle-tax-calendar/preset', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ referenceYear, uf }),
+    });
+    return body;
+  }
+
+  static async generatePayables(
+    vehicleId: string,
+    input: { referenceYear: number; taxType: VehicleTaxType; totalAmount: number },
+  ): Promise<{ items: any[] }> {
+    const body = await request(`/api/vehicle-tax-calendar/vehicle/${encodeURIComponent(vehicleId)}/generate-payables`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    return body;
+  }
 }

@@ -12,6 +12,12 @@ export interface SettlementPaymentMethodOption {
   active: boolean;
 }
 
+export interface QuickAccountInput {
+  name: string;
+  type?: string;
+  initialBalance?: number;
+}
+
 export interface SettlementOptions {
   accounts: SettlementAccountOption[];
   paymentMethods: SettlementPaymentMethodOption[];
@@ -161,5 +167,14 @@ export class FinanceSettlementClient {
 
   static async registerPayment(payableId: string, input: SettlementCommandInput): Promise<void> {
     await requestJson(`/api/finance/payables/${encodeURIComponent(payableId)}/payment`, postJson(input));
+  }
+
+  static async quickCreateAccount(input: QuickAccountInput): Promise<SettlementAccountOption> {
+    const payload = asRecord(await requestJson('/api/finance/settlement-options/quick-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }));
+    return normalizeAccount(payload.account);
   }
 }

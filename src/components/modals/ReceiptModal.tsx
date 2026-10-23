@@ -4,7 +4,7 @@ import React, { useId, useState, useEffect, useRef } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { roundCurrency, formatCurrencyBRL, normalizeCurrencyCentsDraft, parseCurrencyDraft } from '../../shared/utils/currency';
 import { AccountReceivable } from '../../types/entities';
-import { X, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, CheckCircle, AlertCircle, Plus } from 'lucide-react';
 import {
  FinanceSettlementClient,
  SettlementAccountOption,
@@ -13,6 +13,7 @@ import {
  type ReceiptDailyInterestQuote,
 } from '../../api/financeSettlementClient';
 import { markUnsavedChanges, requestGuardedClose } from '../../app/unsavedChangesAuthority';
+import { QuickAccountModal } from './QuickAccountModal';
 
 interface ReceiptModalProps {
  isOpen: boolean;
@@ -56,6 +57,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
  const submittingRef = useRef(false);
  const [confirmOpen, setConfirmOpen] = useState(false);
+ const [isQuickAccountOpen, setIsQuickAccountOpen] = useState(false);
  const [error, setError] = useState<string | null>(null);
  const [dailyQuote, setDailyQuote] = useState<ReceiptDailyInterestQuote | null>(null);
  const [dailyQuoteLoading, setDailyQuoteLoading] = useState(false);
@@ -84,13 +86,19 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
  const options = await FinanceSettlementClient.getOptions();
  setAccounts(options.accounts);
  setMethods(options.paymentMethods);
- if (options.accounts.length > 0) setSelectedAccountId(options.accounts[0].id);
- if (options.paymentMethods.length > 0) setSelectedMethodId(options.paymentMethods[0].id);
+ setSelectedAccountId((prev) => (prev && options.accounts.some((a) => a.id === prev) ? prev : options.accounts[0]?.id || ''));
+ setSelectedMethodId((prev) => (prev && options.paymentMethods.some((m) => m.id === prev) ? prev : options.paymentMethods[0]?.id || ''));
  } catch (err) {
  setAccounts([]);
  setMethods([]);
  setError(err instanceof Error ? err.message : 'Erro ao carregar opções financeiras.');
  }
+ };
+
+ const handleQuickAccountCreated = (newAccount: SettlementAccountOption) => {
+ setAccounts((prev) => [...prev, newAccount]);
+ setSelectedAccountId(newAccount.id);
+ rotateCommandKey();
  };
 
  const dailyInterestValue = parseCurrencyDraft(dailyInterest);
@@ -389,9 +397,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
 
  <div className="grid grid-cols-2 gap-3">
  <div>
- <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
+ <div className="flex items-center justify-between mb-1">
+ <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
  Conta Financeira de Destino *
  </label>
+ <button
+ type="button"
+ onClick={() => setIsQuickAccountOpen(true)}
+ className="text-[11px] font-medium text-action-primary hover:underline inline-flex items-center gap-0.5"
+ >
+ <Plus className="w-3 h-3" /> Nova Conta
+ </button>
+ </div>
  <select
  value={selectedAccountId}
  onChange={(e) => { setSelectedAccountId(e.target.value); rotateCommandKey(); }}
@@ -491,6 +508,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
  <div><dt>Meio de pagamento</dt><dd>{methods.find(method => method.id === selectedMethodId)?.name}</dd></div>
  </dl>
  </ConfirmDialog>
+ <QuickAccountModal
+ isOpen={isQuickAccountOpen}
+ onClose={() => setIsQuickAccountOpen(false)}
+ onAccountCreated={handleQuickAccountCreated}
+ />
  </div>
  </div>
  );

@@ -4,7 +4,7 @@ import React, { useId, useState, useEffect, useRef } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { roundCurrency, formatCurrencyBRL, normalizeCurrencyCentsDraft, parseCurrencyDraft } from '../../shared/utils/currency';
 import { AccountPayable } from '../../types/entities';
-import { X, CreditCard, AlertCircle } from 'lucide-react';
+import { X, CreditCard, AlertCircle, Plus } from 'lucide-react';
 import {
  FinanceSettlementClient,
  SettlementAccountOption,
@@ -12,6 +12,7 @@ import {
  createSettlementIdempotencyKey,
 } from '../../api/financeSettlementClient';
 import { markUnsavedChanges, requestGuardedClose } from '../../app/unsavedChangesAuthority';
+import { QuickAccountModal } from './QuickAccountModal';
 
 interface PaymentModalProps {
  isOpen: boolean;
@@ -54,6 +55,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
  const submittingRef = useRef(false);
  const [confirmOpen, setConfirmOpen] = useState(false);
+ const [isQuickAccountOpen, setIsQuickAccountOpen] = useState(false);
  const [error, setError] = useState<string | null>(null);
 
  useEffect(() => {
@@ -77,13 +79,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
  const options = await FinanceSettlementClient.getOptions();
  setAccounts(options.accounts);
  setMethods(options.paymentMethods);
- if (options.accounts.length > 0) setSelectedAccountId(options.accounts[0].id);
- if (options.paymentMethods.length > 0) setSelectedMethodId(options.paymentMethods[0].id);
+ setSelectedAccountId((prev) => (prev && options.accounts.some((a) => a.id === prev) ? prev : options.accounts[0]?.id || ''));
+ setSelectedMethodId((prev) => (prev && options.paymentMethods.some((m) => m.id === prev) ? prev : options.paymentMethods[0]?.id || ''));
  } catch (err) {
  setAccounts([]);
  setMethods([]);
  setError(err instanceof Error ? err.message : 'Erro ao carregar opções financeiras.');
  }
+ };
+
+ const handleQuickAccountCreated = (newAccount: SettlementAccountOption) => {
+ setAccounts((prev) => [...prev, newAccount]);
+ setSelectedAccountId(newAccount.id);
+ rotateCommandKey();
  };
 
  const interestValue = parseCurrencyDraft(interestAmount);
@@ -326,9 +334,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
 
  <div className="grid grid-cols-2 gap-3">
  <div>
- <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
+ <div className="flex items-center justify-between mb-1">
+ <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
  Conta Financeira de Origem *
  </label>
+ <button
+ type="button"
+ onClick={() => setIsQuickAccountOpen(true)}
+ className="text-[11px] font-medium text-action-primary hover:underline inline-flex items-center gap-0.5"
+ >
+ <Plus className="w-3 h-3" /> Nova Conta
+ </button>
+ </div>
  <select
  value={selectedAccountId}
  onChange={(e) => { setSelectedAccountId(e.target.value); rotateCommandKey(); }}
@@ -428,6 +445,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
  <div><dt>Meio de pagamento</dt><dd>{methods.find(method => method.id === selectedMethodId)?.name}</dd></div>
  </dl>
  </ConfirmDialog>
+ <QuickAccountModal
+ isOpen={isQuickAccountOpen}
+ onClose={() => setIsQuickAccountOpen(false)}
+ onAccountCreated={handleQuickAccountCreated}
+ />
  </div>
  </div>
  );

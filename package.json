@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test:v2-core-corrections": "tsx src/domain/finance/__tests__/v2CompetenceAndDreRegression.ts && tsx src/app/__tests__/localDraftAndVersionRegression.tsx && tsx src/shared/utils/__tests__/documentAlertsAndDownloadRegression.ts && tsx src/server/__tests__/v2InspectionAndDocumentRoutesRegression.ts && tsx src/server/__tests__/v2MaintenanceFinanceRegression.ts",
-    "test:v2-settlement-domain": "tsx src/domain/finance/__tests__/settlementResidualRegression.ts",
+    "test:v2-settlement-domain": "tsx src/domain/finance/__tests__/settlementResidualRegression.ts && tsx src/server/__tests__/settlementOptionsBootstrapRegression.ts",
     "test:v2-settlement-ui": "tsx src/components/modals/__tests__/settlementUiRegression.tsx",
     "test:dre": "tsx src/domain/finance/__tests__/dreExpenseCompositionTestRunner.ts && tsx src/domain/finance/__tests__/dreEvidenceBreakdownTestRunner.ts && tsx src/domain/finance/__tests__/drePayableAdjustmentsTestRunner.ts",
     "test:contract-signature-effective": "tsx src/server/__tests__/contractSignatureEffectiveLocalRunner.ts ./contractSignatureEffectiveRegression.ts",
@@ -111,7 +111,7 @@
     "test:telemetry-km-divergence": "tsx src/server/__tests__/telemetryKmDivergenceIntegration.ts",
     "test:document-ai-intake-sync-resilience": "tsx src/server/__tests__/documentAiIntakeSyncResilienceRegression.ts",
     "test:vehicle-owner-cep-autofill": "tsx src/components/fleet/__tests__/vehicleOwnerAndCepAutofillRegression.ts",
-    "test:vehicle-tax-calendar": "tsx src/server/__tests__/vehicleTaxCalendarRegression.ts",
+    "test:vehicle-tax-calendar": "tsx src/server/__tests__/vehicleTaxCalendarRegression.ts && tsx src/server/__tests__/vehicleTaxCalendarPresetAndPayablesRegression.ts",
     "test:traffic-ticket-indication-state": "tsx src/server/__tests__/trafficTicketDriverIndicationStateMachine.ts",
     "test:user-permissions-matrix": "tsx src/server/__tests__/userPermissionsMatrixRegression.ts",
     "start": "node dist/server.mjs",

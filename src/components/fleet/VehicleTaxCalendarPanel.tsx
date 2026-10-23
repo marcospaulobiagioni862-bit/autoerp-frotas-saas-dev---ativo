@@ -1,14 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { CalendarClock, AlertTriangle, CheckCircle2, Coins, AlertCircle, CheckCircle } from 'lucide-react';
 import {
   VehicleTaxCalendarClient,
   VEHICLE_TAX_TYPE_LABELS,
   type VehicleTaxSchedule,
 } from '../../api/vehicleTaxCalendarClient';
+import { CurrencyInput } from '../ui/CurrencyInput';
+import { Button } from '../ui/Button';
 
 interface Props {
   plate: string;
   uf: string;
+  vehicleId?: string;
 }
 
 function formatDate(iso: string): string {
@@ -22,17 +25,23 @@ function formatDate(iso: string): string {
  * calendário, ele diz isso em vez de inventar data — vencimento de imposto errado
  * vira multa, e um campo vazio é honesto enquanto uma data chutada não é.
  */
-export function VehicleTaxCalendarPanel({ plate, uf }: Props): React.ReactElement {
+export function VehicleTaxCalendarPanel({ plate, uf, vehicleId }: Props): React.ReactElement {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [schedule, setSchedule] = useState<VehicleTaxSchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [taxMode, setTaxMode] = useState<'IPVA_COTA_UNICA' | 'IPVA_PARCELADO'>('IPVA_COTA_UNICA');
+  const [totalAmount, setTotalAmount] = useState<number>(0);
+  const [generating, setGenerating] = useState(false);
+  const [generateMessage, setGenerateMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setGenerateMessage(null);
     VehicleTaxCalendarClient.forVehicle(plate, uf, year)
       .then((result) => { if (!cancelled) setSchedule(result); })
       .catch(() => { if (!cancelled) setError('Não foi possível carregar o calendário agora.'); })
@@ -41,6 +50,45 @@ export function VehicleTaxCalendarPanel({ plate, uf }: Props): React.ReactElemen
   }, [plate, uf, year]);
 
   const hoje = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  const hasIpvaCalendar = useMemo(() => {
+    if (!schedule?.entries) return false;
+    return schedule.entries.some((e) => e.taxType.startsWith('IPVA'));
+  }, [schedule]);
+
+  const handleGeneratePayables = async () => {
+    if (!vehicleId) return;
+    if (totalAmount <= 0) {
+      setGenerateMessage({ type: 'error', text: 'Informe o valor total do IPVA.' });
+      return;
+    }
+    setGenerating(true);
+    setGenerateMessage(null);
+    try {
+      const res = await VehicleTaxCalendarClient.generatePayables(vehicleId, {
+        referenceYear: year,
+        taxType: taxMode,
+        totalAmount,
+      });
+      setGenerateMessage({
+        type: 'success',
+        text: `${res.items.length} título(s) de IPVA gerado(s) com sucesso no Contas a Pagar!`,
+      });
+      setTotalAmount(0);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao gerar títulos de IPVA.';
+      if (msg.includes('409') || msg.toLowerCase().includes('já existem')) {
+        setGenerateMessage({
+          type: 'info',
+          text: 'Já existem contas a pagar de IPVA geradas para este veículo neste ano.',
+        });
+      } else {
+        setGenerateMessage({ type: 'error', text: msg });
+      }
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   if (loading) return <p className="text-xs text-graphite-500">Carregando calendário...</p>;
   if (error) return <p className="text-xs text-error-text">{error}</p>;
@@ -116,6 +164,89 @@ export function VehicleTaxCalendarPanel({ plate, uf }: Props): React.ReactElemen
             );
           })}
         </ul>
+      )}
+
+      {vehicleId && hasIpvaCalendar && (
+        <div className="mt-4 p-3.5 border border-graphite-200 dark:border-graphite-800 rounded-xl bg-graphite-50/50 dark:bg-graphite-900/40 space-y-3">
+          <div className="flex items-center gap-2">
+            <Coins className="w-4 h-4 text-action-primary" />
+            <h4 className="text-xs font-bold text-graphite-800 dark:text-graphite-200">
+              Gerar no Contas a Pagar (IPVA {year})
+            </h4>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+            <div>
+              <label className="block text-[11px] font-semibold text-graphite-600 dark:text-graphite-300 mb-1">
+                Modalidade de Pagamento
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTaxMode('IPVA_COTA_UNICA')}
+                  className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-lg border transition-colors ${
+                    taxMode === 'IPVA_COTA_UNICA'
+                      ? 'bg-action-primary text-on-action-primary border-action-primary'
+                      : 'bg-white dark:bg-graphite-800 border-graphite-200 dark:border-graphite-700 text-graphite-700 dark:text-graphite-300'
+                  }`}
+                >
+                  Cota Única (À Vista)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTaxMode('IPVA_PARCELADO')}
+                  className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-lg border transition-colors ${
+                    taxMode === 'IPVA_PARCELADO'
+                      ? 'bg-action-primary text-on-action-primary border-action-primary'
+                      : 'bg-white dark:bg-graphite-800 border-graphite-200 dark:border-graphite-700 text-graphite-700 dark:text-graphite-300'
+                  }`}
+                >
+                  Parcelado (5x)
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <CurrencyInput
+                label="Valor Total do IPVA (R$) *"
+                value={totalAmount}
+                onChangeValue={(val) => setTotalAmount(val)}
+                placeholder="0,00"
+              />
+            </div>
+          </div>
+
+          {generateMessage && (
+            <div
+              className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
+                generateMessage.type === 'success'
+                  ? 'border border-success-border bg-success-bg text-success-text'
+                  : generateMessage.type === 'info'
+                  ? 'border border-info-border bg-info-bg text-info-text'
+                  : 'border border-error-border bg-error-bg text-error-text'
+              }`}
+            >
+              {generateMessage.type === 'success' ? (
+                <CheckCircle className="w-4 h-4 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0" />
+              )}
+              <span>{generateMessage.text}</span>
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              disabled={generating || totalAmount <= 0}
+              onClick={() => { void handleGeneratePayables(); }}
+            >
+              {generating ? 'Gerando...' : `Gerar Título(s) de IPVA ${year}`}
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
