@@ -9,7 +9,9 @@ import {
  Copy,
  CreditCard,
  DollarSign,
+ Download,
  ExternalLink,
+ Eye,
  File,
  FileText,
  FolderOpen,
@@ -42,16 +44,18 @@ import {
  type WhatsappTaskProposal,
  type WhatsappObservabilitySummary,
 } from '../../api/whatsappClient';
+import { AttachmentClient } from '../../api/attachmentClient';
 import { DriverHealthClient } from '../../api/driverHealthClient';
 import { DriverFormTokenClient } from '../../api/driverFormTokenClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { DocumentClient } from '../../api/documentClient';
 import { FileUpload } from '../documents/FileUpload';
 import { AttachmentList } from '../documents/AttachmentList';
+import { DocumentPreviewModal } from '../documents/DocumentPreviewModal';
 import { DocumentCenterModal } from '../documents/DocumentCenterModal';
 import { EntityFileGallery } from '../documents/EntityFileGallery';
 import { DocumentStatus, DriverStatus } from '../../types/enums';
-import type { DriverHealthAndEmergency } from '../../types/entities';
+import type { DriverHealthAndEmergency, FileAttachment } from '../../types/entities';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 import {
  DriverLegacyDetailsBridge,
@@ -213,6 +217,62 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  const type = String(item.documentType || '').toLocaleUpperCase('pt-BR');
  return item.isCurrent && !item.isArchived && type.includes('RESID');
  });
+
+ const [residenceAttachment, setResidenceAttachment] = useState<FileAttachment | null>(null);
+ const [residencePreviewUrl, setResidencePreviewUrl] = useState<string | null>(null);
+ const [residenceActionError, setResidenceActionError] = useState<string | null>(null);
+
+ useEffect(() => {
+ let cancelled = false;
+ if (!currentResidenceDocument?.attachmentId) {
+ setResidenceAttachment(null);
+ return;
+ }
+ AttachmentClient.get(currentResidenceDocument.attachmentId)
+ .then((att) => {
+ if (!cancelled) setResidenceAttachment(att);
+ })
+ .catch(() => {
+ if (!cancelled) setResidenceAttachment(null);
+ });
+ return () => { cancelled = true; };
+ }, [currentResidenceDocument?.attachmentId, driverAttachmentRefresh]);
+
+ useEffect(() => () => {
+ if (residencePreviewUrl) URL.revokeObjectURL(residencePreviewUrl);
+ }, [residencePreviewUrl]);
+
+ const openResidencePreview = async () => {
+ if (!currentResidenceDocument?.attachmentId) return;
+ setResidenceActionError(null);
+ try {
+ const blob = await AttachmentClient.content(currentResidenceDocument.attachmentId);
+ setResidencePreviewUrl((current) => {
+ if (current) URL.revokeObjectURL(current);
+ return URL.createObjectURL(blob);
+ });
+ } catch (err: unknown) {
+ setResidenceActionError(err instanceof Error ? err.message : 'Não foi possível abrir o comprovante.');
+ }
+ };
+
+ const downloadResidenceDocument = async () => {
+ if (!currentResidenceDocument?.attachmentId) return;
+ setResidenceActionError(null);
+ try {
+ const blob = await AttachmentClient.content(currentResidenceDocument.attachmentId);
+ const url = URL.createObjectURL(blob);
+ const anchor = document.createElement('a');
+ anchor.href = url;
+ anchor.download = residenceAttachment?.fileName || 'comprovante-residencia';
+ document.body.appendChild(anchor);
+ anchor.click();
+ anchor.remove();
+ URL.revokeObjectURL(url);
+ } catch (err: unknown) {
+ setResidenceActionError(err instanceof Error ? err.message : 'Não foi possível baixar o comprovante.');
+ }
+ };
 
  const applyHealthProfile = (health: DriverHealthAndEmergency) => {
  setHealthProfile(health);
@@ -660,14 +720,54 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  <div className="flex flex-col gap-3 rounded-lg border border-graphite-200 p-3 dark:border-graphite-800 sm:flex-row sm:items-center sm:justify-between">
  <div className="flex min-w-0 items-center gap-3">
  <FileText className="h-5 w-5 shrink-0 text-success-icon" />
- <div>
+ <div className="min-w-0">
  <div className="text-sm font-semibold">Comprovante de residência</div>
- <div className="text-[11px] text-graphite-500">
- {currentResidenceDocument ? 'Documento vigente registrado no servidor.' : 'Ainda não anexado.'}
+ <div className="text-[11px] text-graphite-500 truncate">
+ {currentResidenceDocument ? (
+ <>
+ {residenceAttachment?.fileName ? (
+ <span className="font-medium text-graphite-700 dark:text-graphite-300">
+ {residenceAttachment.fileName}
+ </span>
+ ) : (
+ 'Documento vigente registrado no servidor.'
+ )}
+ {currentResidenceDocument.issueDate && (
+ <span> • Emissão: {new Date(`${currentResidenceDocument.issueDate}T00:00:00`).toLocaleDateString('pt-BR')}</span>
+ )}
+ {currentResidenceDocument.notes && (
+ <span> • {currentResidenceDocument.notes}</span>
+ )}
+ </>
+ ) : (
+ 'Ainda não anexado.'
+ )}
  </div>
  </div>
  </div>
  <div className="flex flex-wrap items-center gap-2">
+ {currentResidenceDocument?.attachmentId && (
+ <>
+ <Button
+ size="sm"
+ variant="outline"
+ onClick={() => void openResidencePreview()}
+ title="Visualizar comprovante de residência"
+ >
+ <Eye className="w-4 h-4 mr-1" />
+ Ver
+ </Button>
+ <Button
+ size="sm"
+ variant="outline"
+ onClick={() => void downloadResidenceDocument()}
+ title="Baixar arquivo original"
+ >
+ <Download className="w-4 h-4 mr-1" />
+ Baixar
+ </Button>
+ </>
+ )}
  {currentResidenceDocument && (
  <Badge variant={currentResidenceDocument.complianceStatus === DocumentStatus.VALID ? 'success' : currentResidenceDocument.complianceStatus === DocumentStatus.EXPIRED ? 'danger' : 'warning'}>
  {currentResidenceDocument.complianceStatus === DocumentStatus.VALID ? 'Válido' : currentResidenceDocument.complianceStatus === DocumentStatus.EXPIRED ? 'Vencido' : 'Revisar'}
@@ -683,6 +783,9 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  )}
  </div>
  </div>
+ {residenceActionError && (
+ <p className="text-xs text-error-icon mt-1">{residenceActionError}</p>
+ )}
 
  <div className="rounded-lg border border-dashed border-graphite-300 p-3 dark:border-graphite-700">
  <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1099,6 +1202,18 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  perspective="DRIVER"
  entityId={driver.id}
  entityLabel={`${driver.fullName} (CPF ${driver.cpf})`}
+ />
+ )}
+
+ {residencePreviewUrl && (
+ <DocumentPreviewModal
+ url={residencePreviewUrl}
+ type={residenceAttachment?.mimeType || 'application/pdf'}
+ name={residenceAttachment?.fileName || 'Comprovante de Residência'}
+ onClose={() => setResidencePreviewUrl((current) => {
+ if (current) URL.revokeObjectURL(current);
+ return null;
+ })}
  />
  )}
  </ModalContainer>

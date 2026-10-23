@@ -22,6 +22,7 @@ assert.match(driverDetails, /Histórico e auditoria do motorista/, 'driver histo
 assert.match(driverDetails, /Responsável:/, 'driver history must expose the responsible user');
 assert.match(driverDetails, /Campos alterados:/, 'driver history must summarize changed fields');
 assert.match(driverDetails, /dados técnicos completos não aparecem nesta tela/, 'driver history must avoid exposing raw audit payload values');
-
+assert.match(driverDetails, /openResidencePreview/, 'driver details must expose preview for current residence document');
+assert.match(driverDetails, /downloadResidenceDocument/, 'driver details must expose download for current residence document');
 
 console.log('Driver details document UX regression PASS');
