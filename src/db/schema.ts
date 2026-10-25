@@ -340,7 +340,9 @@ export const financialCategories = pgTable('financial_categories', {
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
-});
+}, (t) => ({
+  unqCompanyLowerNameType: uniqueIndex('uq_financial_categories_company_lower_name_type').on(t.companyId, sql`lower(${t.name})`, t.type),
+}));
 
 export const financialAccounts = pgTable('financial_accounts', {
   id: text('id').primaryKey(),

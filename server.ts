@@ -389,12 +389,19 @@ async function startServer() {
           })
       );
 
-      // Onboarding: seed canonical default financial categories for newly provisioned tenant
-      await FinanceMasterDataAuthority.seedDefaultCategories({
-        companyId: provisioned.companyId,
-        userId: provisioned.userId,
-        name: 'System Bootstrap',
-      });
+      // Onboarding: seed canonical default financial categories for newly provisioned tenant (fail-safe)
+      try {
+        await FinanceMasterDataAuthority.seedDefaultCategories({
+          companyId: provisioned.companyId,
+          userId: provisioned.userId,
+          name: 'System Bootstrap',
+        });
+      } catch (seedError) {
+        console.error('AUTOERP_BOOTSTRAP_CATEGORIES_SEED_WARNING', {
+          companyId: provisioned.companyId,
+          error: seedError instanceof Error ? seedError.message : String(seedError),
+        });
+      }
 
       res.status(201).json({ user: provisioned });
     } catch (error) {

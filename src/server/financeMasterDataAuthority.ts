@@ -294,8 +294,17 @@ export class FinanceMasterDataAuthority {
     return UnitOfWork.run(actor.companyId, async (txContext: any) => {
       await FinancialAuthorizationService.authorize(actor.userId, actor.companyId, 'FINANCIAL_MASTER_DATA_MANAGE', txContext);
       const tx = txContext.getRawTransaction();
-      const existingRows = await tx.select({ id: financialCategories.id, name: financialCategories.name }).from(financialCategories)
+
+      // 1. Advisory lock exclusivo por tenant para serializar execuções concorrentes (ex: duplo clique)
+      await lockLogicalName(tx, actor.companyId, 'category-seed', 'all');
+
+      const existingRows = await tx.select({
+        id: financialCategories.id,
+        name: financialCategories.name,
+        type: financialCategories.type,
+      }).from(financialCategories)
         .where(eq(financialCategories.companyId, actor.companyId));
+
       const existingNames = new Set(existingRows.map((r: any) => String(r.name || '').trim().toLowerCase()));
 
       let createdCount = 0;
@@ -309,8 +318,12 @@ export class FinanceMasterDataAuthority {
           continue;
         }
 
+        // 2. Trava lógica no nome da categoria herdando assertUniqueName e advisory lock
+        await assertUniqueName(tx, financialCategories, actor.companyId, `category:${item.type}`, item.name);
+
         const now = new Date().toISOString();
         const id = randomUUID();
+        // 3. Inserção protegida por onConflictDoNothing (ancorado no índice único físico uq_financial_categories_company_lower_name_type)
         const rows = await tx.insert(financialCategories).values({
           id,
           companyId: actor.companyId,
@@ -321,13 +334,17 @@ export class FinanceMasterDataAuthority {
           active: true,
           createdAt: now,
           updatedAt: now,
-        }).returning();
+        }).onConflictDoNothing().returning();
 
-        const createdItem = rows[0];
-        existingNames.add(normalized);
-        allResultCategories.push({ id: createdItem.id, name: createdItem.name });
-        createdCount++;
-        await audit(txContext, actor, 'FinancialCategory', createdItem.id, AuditAction.CREATE, null, createdItem);
+        if (rows.length > 0) {
+          const createdItem = rows[0];
+          existingNames.add(normalized);
+          allResultCategories.push({ id: createdItem.id, name: createdItem.name });
+          createdCount++;
+          await audit(txContext, actor, 'FinancialCategory', createdItem.id, AuditAction.CREATE, null, createdItem);
+        } else {
+          skippedCount++;
+        }
       }
 
       return {
