@@ -39,6 +39,7 @@ import {
  FileText,
 } from 'lucide-react';
 import { Card, Button, Badge, Skeleton, PageHeader } from '../ui';
+import { MaintenancePreventiveClient } from '../../api/maintenancePreventiveClient';
 import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/serverOperationalPendingProjection';
 import { summarizeFleetOperationalState } from '../../domain/operations/fleetOperationalState';
 
@@ -137,6 +138,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
  tickets,
  insurances,
  trackers,
+ maintenancePlans,
  ] = await Promise.all([
  recRepo.findAllForCompany(companyIdSnapshot),
  payRepo.findAllForCompany(companyIdSnapshot),
@@ -152,6 +154,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
  ticketRepo.findAllForCompany(companyIdSnapshot),
  insRepo.findAllForCompany(companyIdSnapshot),
  trackRepo.findAllForCompany(companyIdSnapshot),
+ MaintenancePreventiveClient.listPlans().catch(() => []),
  ]);
 
  if (
@@ -174,6 +177,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
  vehicles: vehs,
  contracts: conts,
  maintenances,
+ maintenancePlans,
  vehicleDocuments,
  driverDocuments,
  tickets,

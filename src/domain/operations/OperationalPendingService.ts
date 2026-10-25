@@ -1,5 +1,6 @@
-import { Vehicle, Contract, Maintenance, VehicleDocument, DriverDocument, TrafficTicket, Driver, Insurance, Tracker } from '../../types/entities';
+import { Vehicle, Contract, Maintenance, MaintenancePlan, VehicleDocument, DriverDocument, TrafficTicket, Driver, Insurance, Tracker } from '../../types/entities';
 import { VehicleStatus, ContractStatus, MaintenanceStatus, DocumentStatus, TicketStatus } from '../../types/enums';
+import { projectMaintenancePlan, type MaintenanceProjectionRule } from '../maintenance/maintenancePreventivePolicy';
 
 export type PendingType = 
   | 'VEHICLE' 
@@ -45,6 +46,8 @@ export interface OperationalPendingInput {
   vehicles?: Vehicle[];
   contracts?: Contract[];
   maintenances?: Maintenance[];
+  maintenancePlans?: MaintenancePlan[];
+  maintenanceAlertRule?: MaintenanceProjectionRule;
   vehicleDocuments?: VehicleDocument[];
   driverDocuments?: DriverDocument[];
   tickets?: TrafficTicket[];
@@ -73,6 +76,7 @@ export function generateOperationalPendings(data: OperationalPendingInput = {}):
   const drivers = Array.isArray(data.drivers) ? data.drivers.filter(d => d && !d.isArchived && (!data.companyId || d.companyId === targetCompanyId)) : [];
   const insurances = Array.isArray(data.insurances) ? data.insurances.filter(i => i && (!data.companyId || i.companyId === targetCompanyId)) : [];
   const trackers = Array.isArray(data.trackers) ? data.trackers.filter(t => t && (!data.companyId || t.companyId === targetCompanyId)) : [];
+  const maintenancePlans = Array.isArray(data.maintenancePlans) ? data.maintenancePlans.filter(p => p && (!data.companyId || p.companyId === targetCompanyId)) : [];
 
   const todayStr = new Date().toISOString().split('T')[0];
   const todayTime = new Date(todayStr).getTime();
@@ -249,6 +253,76 @@ export function generateOperationalPendings(data: OperationalPendingInput = {}):
         });
       }
     }
+  });
+
+  // 3.1. PREVENTIVE MAINTENANCE PLANS
+  maintenancePlans.forEach(plan => {
+    if (!plan || plan.status === 'ARCHIVED' || plan.status === 'PAUSED' || plan.status === 'COMPLETED' || plan.status !== 'ACTIVE') {
+      return;
+    }
+    const veh = vehicleMap.get(plan.vehicleId);
+    const projection = plan.projectedStatus
+      ? {
+          projectedStatus: plan.projectedStatus,
+          projectedStage: plan.projectedStage || 'NONE',
+          dueReference: plan.dueReference || '',
+          remainingKm: plan.remainingKm,
+          remainingDays: plan.remainingDays,
+        }
+      : projectMaintenancePlan(plan, Number(veh?.currentKm || 0), todayStr, data.maintenanceAlertRule);
+
+    if (projection.projectedStatus !== 'OVERDUE' && projection.projectedStatus !== 'DUE') {
+      return;
+    }
+
+    const isOverdue = projection.projectedStatus === 'OVERDUE';
+    const priority: PendingPriority = isOverdue ? 'P1' : 'P2';
+    const severity: PendingSeverity = isOverdue ? 'CRITICAL' : 'WARNING';
+    const title = `${isOverdue ? 'Preventiva Vencida' : 'Preventiva a Vencer'}: ${plan.name} (${veh?.plate || 'Veículo'})`;
+
+    const detailParts: string[] = [];
+    if (projection.remainingKm !== undefined) {
+      detailParts.push(
+        projection.remainingKm < 0
+          ? `${Math.abs(projection.remainingKm).toLocaleString('pt-BR')} km vencidos`
+          : `faltam ${projection.remainingKm.toLocaleString('pt-BR')} km`
+      );
+    }
+    if (projection.remainingDays !== undefined) {
+      detailParts.push(
+        projection.remainingDays < 0
+          ? `${Math.abs(projection.remainingDays)} dia(s) vencidos`
+          : `faltam ${projection.remainingDays} dia(s)`
+      );
+    }
+    const detailStr = detailParts.length > 0 ? ` (${detailParts.join(' • ')})` : '';
+    const targetKmStr = plan.nextDueKm !== undefined ? ` • Próximo KM previsto: ${plan.nextDueKm.toLocaleString('pt-BR')}` : '';
+    const targetDateStr = plan.nextDueDate ? ` • Data prevista: ${plan.nextDueDate}` : '';
+    const description = `O plano preventivo "${plan.name}" do veículo ${veh?.plate || 'N/A'} está ${isOverdue ? 'vencido' : 'a vencer'}${detailStr}.${targetKmStr}${targetDateStr}`;
+
+    const overdueDays = (projection.remainingDays !== undefined && projection.remainingDays < 0)
+      ? Math.abs(projection.remainingDays)
+      : (isOverdue ? 1 : 0);
+
+    addPending({
+      type: 'MAINTENANCE',
+      category: 'Manutenção Preventiva',
+      priority,
+      severity,
+      title,
+      description,
+      entity: 'MaintenancePlan',
+      entityId: plan.id,
+      vehiclePlate: veh?.plate,
+      dueDate: plan.nextDueDate,
+      overdueDays,
+      status: 'OPEN',
+      origin: 'Manutenção Preventiva',
+      actionRecommended: 'Agendar ou abrir ordem de serviço para execução da preventiva',
+      destinationTab: 'maintenance',
+      companyId: plan.companyId || targetCompanyId,
+      timestamp: new Date().toISOString(),
+    });
   });
 
   // 3. MAINTENANCE

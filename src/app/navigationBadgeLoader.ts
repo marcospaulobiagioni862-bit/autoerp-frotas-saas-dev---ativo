@@ -1,4 +1,5 @@
 import { TrackerClient } from '../api/trackerClient';
+import { MaintenancePreventiveClient } from '../api/maintenancePreventiveClient';
 import { generateOperationalPendings } from '../domain/operations/serverOperationalPendingProjection';
 import {
   AccountPayableRepository,
@@ -53,6 +54,7 @@ export async function loadNavigationBadgeCounts(
     drivers,
     insurances,
     trackers,
+    maintenancePlans,
   ] = await Promise.all([
     recRepo.findAllForCompany(companyId),
     payRepo.findAllForCompany(companyId),
@@ -65,6 +67,7 @@ export async function loadNavigationBadgeCounts(
     drvRepo.findAllForCompany(companyId),
     insRepo.findAllForCompany(companyId),
     TrackerClient.list(),
+    MaintenancePreventiveClient.listPlans().catch(() => []),
   ]);
 
   if (!requestStillCurrent()) return null;
@@ -76,6 +79,7 @@ export async function loadNavigationBadgeCounts(
     vehicles,
     contracts,
     maintenances,
+    maintenancePlans,
     vehicleDocuments,
     driverDocuments,
     tickets,

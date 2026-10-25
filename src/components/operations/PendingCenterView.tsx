@@ -13,6 +13,7 @@ import {
  AccountPayableRepository,
 } from '../../persistence/repositories/serverReadModelRepositories';
 import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/serverOperationalPendingProjection';
+import { MaintenancePreventiveClient } from '../../api/maintenancePreventiveClient';
 import { 
  AlertTriangle, 
  ShieldAlert, 
@@ -83,7 +84,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
  const receivableRepo = new AccountReceivableRepository();
  const payableRepo = new AccountPayableRepository();
 
- const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers, receivables, payables] = await Promise.all([
+ const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers, receivables, payables, maintenancePlans] = await Promise.all([
  vehRepo.findAll({ companyId }),
  contractRepo.findAll({ companyId }),
  maintRepo.findAll({ companyId }),
@@ -95,6 +96,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
  trackRepo.findAll({ companyId }),
  receivableRepo.findAllForCompany(companyId),
  payableRepo.findAllForCompany(companyId),
+ MaintenancePreventiveClient.listPlans().catch(() => []),
  ]);
 
  const results = generateOperationalPendings({
@@ -102,6 +104,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
  vehicles,
  contracts,
  maintenances,
+ maintenancePlans,
  vehicleDocuments,
  driverDocuments,
  tickets,
