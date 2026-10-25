@@ -17,7 +17,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test:recurring": "tsx src/domain/finance/__tests__/recurringScheduleTestRunner.ts",
-    "test:maintenance-client": "tsx src/api/__tests__/maintenancePreventiveClientTestRunner.ts",
+    "test:maintenance-client": "tsx src/api/__tests__/maintenancePreventiveClientTestRunner.ts && tsx src/components/maintenance/__tests__/workOrderSupplierPropagationRegression.test.ts",
     "test:work-order-supplier-propagation": "tsx src/components/maintenance/__tests__/workOrderSupplierPropagationRegression.test.ts",
     "test:contract-billing-client": "tsx src/api/__tests__/contractBillingDayClientTestRunner.ts",
     "test:api-payload-normalization": "tsx src/api/__tests__/apiPayloadNormalizationRegression.ts",
