@@ -1,32 +1,25 @@
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { homedir } from 'node:os';
 import { sql } from 'drizzle-orm';
+import { db } from '../../db';
+import { FinanceMasterDataAuthority } from '../financeMasterDataAuthority';
 import { DEFAULT_FINANCIAL_CATEGORIES } from '../../shared/utils/financialDreGroups';
 
-// Configuração de ambiente para conexão Postgres / Neon
-try {
-  const neonEnvPath = resolve(homedir(), '.config/autoerp-neon.env');
-  if (existsSync(neonEnvPath)) {
-    const envContent = readFileSync(neonEnvPath, 'utf8');
-    for (const line of envContent.split('\n')) {
-      const match = line.match(/^export\s+([A-Z_]+)="?([^"\n]+)"?/);
-      if (match) process.env[match[1]] = match[2];
+// Em ambiente de teste local isolado sem Postgres ativo (fallback PGlite),
+// aplica as migrações canônicas de drizzle/ diretamente para garantir integridade do schema (Regra 3.2-g).
+// No CI, o runner migrate_test_db.cjs já aplica o schema completo no banco Postgres.
+if ((db as any).$client && typeof (db as any).$client.exec === 'function') {
+  for (const file of readdirSync('drizzle').filter((name) => name.endsWith('.sql')).sort()) {
+    try {
+      await (db as any).$client.exec(readFileSync(`drizzle/${file}`, 'utf8'));
+    } catch (e) {
+      // Ignora se tabela/função já existir em re-execução
     }
   }
-} catch {
-  // fallback to environment
+  await db.execute(sql`CREATE OR REPLACE FUNCTION pg_advisory_xact_lock(bigint) RETURNS void LANGUAGE SQL AS 'SELECT NULL::void'`);
+  await db.execute(sql`CREATE OR REPLACE FUNCTION pg_advisory_xact_lock_shared(bigint) RETURNS void LANGUAGE SQL AS 'SELECT NULL::void'`);
 }
-
-const neonUrl = process.env.STAGING_MAIN_DATABASE_URL || process.env.HOMOLOG_DATABASE_URL || process.env.DATABASE_URL;
-if (neonUrl) {
-  process.env.DATABASE_URL = neonUrl;
-  process.env.USE_PGLITE = 'false';
-}
-
-const { db } = await import('../../db');
-const { FinanceMasterDataAuthority } = await import('../financeMasterDataAuthority');
 
 // 1. Invariantes Estáticas e Contratos de Fonte Única da Verdade (Regras 3.1 & 3.2)
 const authoritySrc = readFileSync(resolve(process.cwd(), 'src/server/financeMasterDataAuthority.ts'), 'utf8');
@@ -70,65 +63,6 @@ assert(serverSrc.includes('AUTOERP_BOOTSTRAP_CATEGORIES_SEED_WARNING'), 'server.
 assert(seedSrc.includes('FinanceMasterDataAuthority.seedDefaultCategories'), 'src/db/seed.ts must call canonical seedDefaultCategories');
 
 // 2. Execução REAL da Idempotência contra Banco de Dados (Regra 3.2-h)
-async function setupTables(): Promise<void> {
-  const statements = [
-    `CREATE TABLE IF NOT EXISTS companies (
-      id text PRIMARY KEY,
-      name text NOT NULL,
-      status text NOT NULL DEFAULT 'ACTIVE',
-      created_at timestamptz NOT NULL DEFAULT now(),
-      updated_at timestamptz NOT NULL DEFAULT now()
-    )`,
-    `CREATE TABLE IF NOT EXISTS users (
-      id text PRIMARY KEY,
-      company_id text NOT NULL,
-      name text NOT NULL,
-      email text NOT NULL,
-      role text NOT NULL,
-      phone text,
-      avatar_url text,
-      active boolean NOT NULL DEFAULT true,
-      permissions text[],
-      created_at timestamptz NOT NULL DEFAULT now(),
-      updated_at timestamptz NOT NULL DEFAULT now()
-    )`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url text`,
-    `CREATE TABLE IF NOT EXISTS financial_categories (
-      id text PRIMARY KEY,
-      company_id text NOT NULL,
-      name text NOT NULL,
-      type text NOT NULL,
-      parent_id text,
-      dre_group text,
-      active boolean NOT NULL DEFAULT true,
-      created_at timestamptz NOT NULL DEFAULT now(),
-      updated_at timestamptz NOT NULL DEFAULT now()
-    )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS uq_financial_categories_company_lower_name_type
-      ON financial_categories (company_id, lower(name), type)`,
-    `CREATE TABLE IF NOT EXISTS audit_logs (
-      id text PRIMARY KEY,
-      company_id text NOT NULL,
-      user_id text,
-      action text NOT NULL,
-      entity_name text NOT NULL DEFAULT 'FinancialCategory',
-      entity_type text NOT NULL DEFAULT 'FinancialCategory',
-      entity_id text NOT NULL,
-      changes text,
-      previous_state text,
-      new_state text,
-      timestamp timestamptz NOT NULL DEFAULT now(),
-      correlation_id text,
-      user_name text,
-      ip_address text
-    )`,
-  ];
-  for (const stmt of statements) {
-    await db.execute(sql.raw(stmt));
-  }
-}
-
 const testCompanyId = 'co-seed-idempotency-test-real';
 const testUserId = 'user-admin-seed-real';
 const testActor = {
@@ -138,13 +72,11 @@ const testActor = {
 };
 
 async function cleanTestData(): Promise<void> {
-  await db.execute(sql`DELETE FROM audit_logs WHERE company_id = ${testCompanyId}`);
   await db.execute(sql`DELETE FROM financial_categories WHERE company_id = ${testCompanyId}`);
   await db.execute(sql`DELETE FROM users WHERE company_id = ${testCompanyId}`);
   await db.execute(sql`DELETE FROM companies WHERE id = ${testCompanyId}`);
 }
 
-await setupTables();
 await cleanTestData();
 
 try {
