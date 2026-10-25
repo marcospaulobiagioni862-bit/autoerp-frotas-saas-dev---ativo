@@ -4,19 +4,21 @@ import { createServer } from 'node:http';
 import { UnitOfWork } from '../../db/uow';
 import { registerFinanceRoutes } from '../financeRoutes';
 
-async function testSettlementOptionsBootstrap(): Promise<void> {
+async function testSettlementOptionsRegression(): Promise<void> {
   const app = express();
   app.use(express.json());
 
-  // Injetar principal simulado
+  let currentPrincipal = {
+    userId: 'user-settlement-test',
+    companyId: 'company-settlement-test',
+    name: 'Tester',
+    role: 'ADMIN',
+    permissions: ['*'],
+  };
+
+  // Injetar principal simulado dinamicamente
   app.use((req, _res, next) => {
-    (req as any).principal = {
-      userId: 'user-settlement-test',
-      companyId: 'company-settlement-test',
-      name: 'Tester',
-      role: 'ADMIN',
-      permissions: ['*'],
-    };
+    (req as any).principal = { ...currentPrincipal };
     next();
   });
 
@@ -55,7 +57,25 @@ async function testSettlementOptionsBootstrap(): Promise<void> {
   };
 
   try {
-    // 1. GET /api/finance/settlement-options deve fazer auto-bootstrap quando não houver contas/métodos ativos
+    // 1. GET /api/finance/settlement-options com usuário não autorizado -> 403 Forbidden
+    currentPrincipal = {
+      userId: 'user-no-finance',
+      companyId: 'company-settlement-test',
+      name: 'No Finance',
+      role: 'OPERATIONAL',
+      permissions: ['VEHICLE_VIEW'],
+    };
+    const forbiddenGetRes = await fetch(`${baseUrl}/api/finance/settlement-options`);
+    assert.equal(forbiddenGetRes.status, 403, 'GET settlement-options sem VIEW_FINANCE deve retornar 403');
+
+    // 2. GET /api/finance/settlement-options deve ser LEITURA PURA (zero bootstrap, estado vazio honesto)
+    currentPrincipal = {
+      userId: 'user-readonly',
+      companyId: 'company-settlement-test',
+      name: 'Readonly User',
+      role: 'READONLY',
+      permissions: ['VIEW_FINANCE'],
+    };
     assert.equal(mockAccounts.length, 0);
     assert.equal(mockPaymentMethods.length, 0);
 
@@ -63,20 +83,29 @@ async function testSettlementOptionsBootstrap(): Promise<void> {
     assert.equal(getRes.status, 200);
     const options = await getRes.json();
 
-    assert.equal(options.accounts.length, 1);
-    assert.equal(options.accounts[0].name, 'Caixa Geral');
-    assert.equal(options.accounts[0].type, 'CASH');
-    assert.equal(options.accounts[0].status, 'ACTIVE');
+    assert.equal(options.accounts.length, 0, 'Não deve fazer bootstrap de contas no GET');
+    assert.equal(options.paymentMethods.length, 0, 'Não deve fazer bootstrap de métodos no GET');
+    assert.equal(mockAccounts.length, 0, 'Banco deve permanecer inalterado após GET');
+    assert.equal(mockPaymentMethods.length, 0, 'Banco deve permanecer inalterado após GET');
 
-    assert.equal(options.paymentMethods.length, 5);
-    const methodTypes = options.paymentMethods.map((m: any) => m.type);
-    assert.ok(methodTypes.includes('PIX'));
-    assert.ok(methodTypes.includes('TRANSFER'));
-    assert.ok(methodTypes.includes('BOLETO'));
-    assert.ok(methodTypes.includes('CREDIT_CARD'));
-    assert.ok(methodTypes.includes('CASH'));
+    // 3. POST /api/finance/settlement-options/quick-account com perfil READONLY -> 403 Forbidden
+    const forbiddenPostRes = await fetch(`${baseUrl}/api/finance/settlement-options/quick-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Caixa Rápido', type: 'CASH' }),
+    });
+    assert.equal(forbiddenPostRes.status, 403, 'POST quick-account sem permissão de mutação deve retornar 403');
 
-    // 2. POST /api/finance/settlement-options/quick-account - rejeitar nome vazio (400)
+    // 4. Usuário com permissão PAYMENT_REGISTER e VIEW_FINANCE agora executa mutações
+    currentPrincipal = {
+      userId: 'user-operator',
+      companyId: 'company-settlement-test',
+      name: 'Operator',
+      role: 'OPERATIONAL',
+      permissions: ['VIEW_FINANCE', 'PAYMENT_REGISTER'],
+    };
+
+    // 4a. Rejeitar nome vazio (400)
     const emptyNameRes = await fetch(`${baseUrl}/api/finance/settlement-options/quick-account`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -84,35 +113,97 @@ async function testSettlementOptionsBootstrap(): Promise<void> {
     });
     assert.equal(emptyNameRes.status, 400);
 
-    // 3. POST /api/finance/settlement-options/quick-account - criar conta com sucesso (201)
-    const createRes = await fetch(`${baseUrl}/api/finance/settlement-options/quick-account`, {
+    // 4b. Rejeitar initialBalance inválido (400) - nunca silenciar para 0
+    const invalidBalanceText = await fetch(`${baseUrl}/api/finance/settlement-options/quick-account`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Banco Itaú - Operacional', type: 'CHECKING', initialBalance: 1500 }),
+      body: JSON.stringify({ name: 'Conta Inválida 1', initialBalance: 'abc' }),
     });
-    assert.equal(createRes.status, 201);
-    const createdData = await createRes.json();
-    assert.equal(createdData.account.name, 'Banco Itaú - Operacional');
-    assert.equal(createdData.account.type, 'CHECKING');
-    assert.equal(createdData.account.status, 'ACTIVE');
+    assert.equal(invalidBalanceText.status, 400, 'Saldo não-numérico deve retornar 400');
+
+    const invalidBalance3Decimals = await fetch(`${baseUrl}/api/finance/settlement-options/quick-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Conta Inválida 2', initialBalance: '1,234' }),
+    });
+    assert.equal(invalidBalance3Decimals.status, 400, 'Saldo com 3 casas decimais deve retornar 400');
+
+    const invalidBalanceNegative = await fetch(`${baseUrl}/api/finance/settlement-options/quick-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Conta Inválida 3', initialBalance: -100 }),
+    });
+    assert.equal(invalidBalanceNegative.status, 400, 'Saldo negativo deve retornar 400');
+
+    // 4c. Criar conta com sucesso usando máscara brasileira R$ '2.500,00' -> 2500 (201)
+    const createBrlRes = await fetch(`${baseUrl}/api/finance/settlement-options/quick-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Banco Itaú - Operacional', type: 'CHECKING', initialBalance: '2.500,00' }),
+    });
+    assert.equal(createBrlRes.status, 201);
+    const createdBrlData = await createBrlRes.json();
+    assert.equal(createdBrlData.account.name, 'Banco Itaú - Operacional');
+    assert.equal(createdBrlData.account.type, 'CHECKING');
+    assert.equal(createdBrlData.account.status, 'ACTIVE');
+    assert.equal(createdBrlData.account.initialBalance, '2500');
+    assert.equal(createdBrlData.account.currentBalance, '2500');
+    assert.equal(mockAccounts.length, 1);
+
+    // 4d. Criar conta com saldo numérico float (201)
+    const createNumRes = await fetch(`${baseUrl}/api/finance/settlement-options/quick-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Caixa Físico Balcão', type: 'CASH', initialBalance: 150.75 }),
+    });
+    assert.equal(createNumRes.status, 201);
+    const createdNumData = await createNumRes.json();
+    assert.equal(createdNumData.account.initialBalance, '150.75');
     assert.equal(mockAccounts.length, 2);
 
-    // 4. POST /api/finance/settlement-options/quick-account - rejeitar duplicidade de nome ativo (409)
+    // 4e. Criar conta sem informar saldo (default 0) (201)
+    const createZeroRes = await fetch(`${baseUrl}/api/finance/settlement-options/quick-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Caixa Reserva', type: 'CASH' }),
+    });
+    assert.equal(createZeroRes.status, 201);
+    const createdZeroData = await createZeroRes.json();
+    assert.equal(createdZeroData.account.initialBalance, '0');
+    assert.equal(mockAccounts.length, 3);
+
+    // 4f. Rejeitar duplicidade de nome ativo (case-insensitive e com espaços) (409)
     const duplicateRes = await fetch(`${baseUrl}/api/finance/settlement-options/quick-account`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'banco itaú - operacional', type: 'CHECKING' }),
+      body: JSON.stringify({ name: '  banco itaú - operacional  ', type: 'CHECKING' }),
     });
     assert.equal(duplicateRes.status, 409);
+    const dupBody = await duplicateRes.json();
+    assert.equal(dupBody.error, 'Já existe uma conta ativa com este nome.');
+
+    // 5. GET settlement-options retorna agora as contas cadastradas
+    const getPopulatedRes = await fetch(`${baseUrl}/api/finance/settlement-options`);
+    assert.equal(getPopulatedRes.status, 200);
+    const populatedOptions = await getPopulatedRes.json();
+    assert.equal(populatedOptions.accounts.length, 3);
+    assert.equal(populatedOptions.accounts[0].name, 'Banco Itaú - Operacional');
 
     console.log('settlementOptionsBootstrapRegression: PASS');
   } finally {
     (UnitOfWork as any).run = originalRun;
-    server.close();
+    if (typeof (server as any).closeAllConnections === 'function') {
+      (server as any).closeAllConnections();
+    }
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 }
 
-testSettlementOptionsBootstrap().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+testSettlementOptionsRegression()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

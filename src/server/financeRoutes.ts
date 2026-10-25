@@ -15,12 +15,13 @@ import { ProfitabilityService } from '../domain/finance/ProfitabilityService';
 import { DepositService } from '../domain/finance/DepositService';
 import { FinancialPeriodService } from '../domain/finance/FinancialPeriodService';
 import { FinancialAuthorizationService } from '../domain/finance/FinancialAuthorizationService';
+import { parseCurrencyDraft, roundCurrency } from '../shared/utils/currency';
 
 function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
   return (req as Request & { principal?: AuthenticatedPrincipal }).principal;
 }
 
-function requireFinancePrincipal(req: Request, res: Response, requiredPermission?: string): AuthenticatedPrincipal | null {
+function requireFinancePrincipal(req: Request, res: Response, requiredPermission?: string | string[]): AuthenticatedPrincipal | null {
   const principal = principalFrom(req);
   if (!principal?.userId || !principal?.companyId) {
     res.status(401).json({ error: 'Unauthorized: Authentication required' });
@@ -32,7 +33,9 @@ function requireFinancePrincipal(req: Request, res: Response, requiredPermission
   if (role === 'ADMIN' || permissions.includes('*')) return principal;
 
   if (requiredPermission) {
-    if (!FinancialAuthorizationService.matchesPermission(permissions, requiredPermission)) {
+    const requiredList = Array.isArray(requiredPermission) ? requiredPermission : [requiredPermission];
+    const hasAny = requiredList.some((p) => FinancialAuthorizationService.matchesPermission(permissions, p));
+    if (!hasAny) {
       res.status(403).json({ error: 'Forbidden' });
       return null;
     }
@@ -512,7 +515,7 @@ export function registerFinanceRoutes(app: Express): void {
   // SECURITY-2G4: settlement options and settlement commands are server-authoritative.
   // Tenant and audit identity are derived exclusively from the authenticated principal.
   app.get('/api/finance/settlement-options', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, 'VIEW_FINANCE');
     if (!principal) return;
 
     try {
@@ -522,40 +525,11 @@ export function registerFinanceRoutes(app: Express): void {
         if (!accountRepo.findAll || !paymentMethodRepo) {
           throw new Error('Settlement repositories unavailable');
         }
-        let accounts = await accountRepo.findAll();
-        let activeAccounts = accounts.filter((item: any) => item.status === 'ACTIVE');
+        const accounts = await accountRepo.findAll();
+        const activeAccounts = accounts.filter((item: any) => item.status === 'ACTIVE');
 
-        // PH-087: Auto-bootstrap default account if tenant has none active
-        if (activeAccounts.length === 0) {
-          const defaultAccount = await accountRepo.create({
-            id: `acc-default-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            companyId: principal.companyId,
-            name: 'Caixa Geral',
-            type: 'CASH',
-            status: 'ACTIVE',
-            initialBalance: '0',
-            currentBalance: '0',
-          });
-          activeAccounts = [defaultAccount];
-        }
-
-        let paymentMethods = await paymentMethodRepo.findAll();
-        let activePaymentMethods = paymentMethods.filter((item: any) => item.active !== false);
-
-        // PH-087: Auto-bootstrap standard payment methods if tenant has none active
-        if (activePaymentMethods.length === 0) {
-          const standardMethods = [
-            { id: `pm-pix-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, companyId: principal.companyId, name: 'PIX', type: 'PIX', active: true, feePercentage: '0' },
-            { id: `pm-ted-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, companyId: principal.companyId, name: 'Transferência TED/DOC', type: 'TRANSFER', active: true, feePercentage: '0' },
-            { id: `pm-bol-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, companyId: principal.companyId, name: 'Boleto Bancário', type: 'BOLETO', active: true, feePercentage: '0' },
-            { id: `pm-cc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, companyId: principal.companyId, name: 'Cartão de Crédito', type: 'CREDIT_CARD', active: true, feePercentage: '0' },
-            { id: `pm-cash-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, companyId: principal.companyId, name: 'Dinheiro', type: 'CASH', active: true, feePercentage: '0' },
-          ];
-          for (const method of standardMethods) {
-            await paymentMethodRepo.create(method);
-          }
-          activePaymentMethods = standardMethods;
-        }
+        const paymentMethods = await paymentMethodRepo.findAll();
+        const activePaymentMethods = paymentMethods.filter((item: any) => item.active !== false);
 
         return {
           accounts: activeAccounts,
@@ -570,7 +544,13 @@ export function registerFinanceRoutes(app: Express): void {
 
   // PH-087: Criação rápida inline de conta financeira no fluxo de baixa
   app.post('/api/finance/settlement-options/quick-account', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, [
+      'PAYMENT_REGISTER',
+      'RECEIPT_REGISTER',
+      'PAYABLE_MUTATE',
+      'RECEIVABLE_MUTATE',
+      'FINANCIAL_MASTER_DATA_MANAGE',
+    ]);
     if (!principal) return;
 
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
@@ -583,11 +563,29 @@ export function registerFinanceRoutes(app: Express): void {
     const rawType = typeof req.body?.type === 'string' ? req.body.type.trim().toUpperCase() : 'CASH';
     const type = allowedTypes.includes(rawType) ? rawType : 'CASH';
 
-    const initialBalance = typeof req.body?.initialBalance === 'number' && Number.isFinite(req.body.initialBalance)
-      ? req.body.initialBalance
-      : typeof req.body?.initialBalance === 'string'
-        ? Number(req.body.initialBalance.replace(',', '.')) || 0
-        : 0;
+    let initialBalance = 0;
+    if (req.body?.initialBalance !== undefined && req.body?.initialBalance !== null) {
+      if (typeof req.body.initialBalance === 'number') {
+        if (!Number.isFinite(req.body.initialBalance) || req.body.initialBalance < 0) {
+          res.status(400).json({ error: 'Saldo inicial inválido' });
+          return;
+        }
+        initialBalance = roundCurrency(req.body.initialBalance);
+      } else if (typeof req.body.initialBalance === 'string') {
+        const raw = req.body.initialBalance.trim();
+        if (raw !== '') {
+          const parsed = parseCurrencyDraft(raw);
+          if (Number.isNaN(parsed) || !Number.isFinite(parsed) || parsed < 0) {
+            res.status(400).json({ error: 'Saldo inicial inválido' });
+            return;
+          }
+          initialBalance = roundCurrency(parsed);
+        }
+      } else {
+        res.status(400).json({ error: 'Saldo inicial inválido' });
+        return;
+      }
+    }
 
     try {
       const account = await UnitOfWork.run(principal.companyId, async (txContext) => {
