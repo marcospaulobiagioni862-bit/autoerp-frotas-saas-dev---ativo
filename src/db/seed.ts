@@ -1,5 +1,6 @@
 import { db } from './index';
-import { companies, users, financialCategories } from './schema';
+import { companies, users } from './schema';
+import { FinanceMasterDataAuthority } from '../server/financeMasterDataAuthority';
 
 export async function runProductionSeed() {
   console.log('Running Production Seed...');
@@ -23,22 +24,14 @@ export async function runProductionSeed() {
     active: true,
   }).onConflictDoNothing();
 
-  // 3. Essential Categories
-  await db.insert(financialCategories).values({
-    id: 'cat-income-rental',
-    companyId: companyId,
-    name: 'Locação',
-    type: 'INCOME',
-    active: true,
-  }).onConflictDoNothing();
-
-  await db.insert(financialCategories).values({
-    id: 'cat-expense-maintenance',
-    companyId: companyId,
-    name: 'Manutenção',
-    type: 'EXPENSE',
-    active: true,
-  }).onConflictDoNothing();
+  // 3. Essential Categories via Canonical Authority (PH-122)
+  await FinanceMasterDataAuthority.seedDefaultCategories({
+    companyId,
+    userId: 'user-admin-001',
+    name: 'System Admin',
+    role: 'ADMIN',
+    permissions: ['*'],
+  });
 
   console.log('Production Seed Complete.');
 }

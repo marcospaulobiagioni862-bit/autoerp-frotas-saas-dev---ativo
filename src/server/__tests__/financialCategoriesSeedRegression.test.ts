@@ -12,6 +12,8 @@ const authoritySrc = readFileSync(resolve(process.cwd(), 'src/server/financeMast
 const routesSrc = readFileSync(resolve(process.cwd(), 'src/server/financeMasterDataRoutes.ts'), 'utf8');
 const clientSrc = readFileSync(resolve(process.cwd(), 'src/api/financeMasterDataClient.ts'), 'utf8');
 const uiSrc = readFileSync(resolve(process.cwd(), 'src/components/finance/FinancialMasterDataView.tsx'), 'utf8');
+const serverSrc = readFileSync(resolve(process.cwd(), 'server.ts'), 'utf8');
+const seedSrc = readFileSync(resolve(process.cwd(), 'src/db/seed.ts'), 'utf8');
 
 // Ensure mandatory expense categories for fleet operations requested by Marcos are present:
 const requiredCategories = [
@@ -38,6 +40,10 @@ assert(authoritySrc.includes("FINANCIAL_MASTER_DATA_MANAGE"), 'seedDefaultCatego
 assert(routesSrc.includes("/api/finance/master-data/categories/seed-defaults"), 'Routes must expose POST /api/finance/master-data/categories/seed-defaults');
 assert(clientSrc.includes('seedDefaultCategories'), 'FinanceMasterDataClient must expose seedDefaultCategories');
 assert(uiSrc.includes('FinanceMasterDataClient.seedDefaultCategories()'), 'UI button must invoke authoritative seedDefaultCategories endpoint');
+
+// Onboarding checks (PH-122 Part 2):
+assert(serverSrc.includes('FinanceMasterDataAuthority.seedDefaultCategories'), 'server.ts bootstrap must seed canonical default categories during tenant onboarding');
+assert(seedSrc.includes('FinanceMasterDataAuthority.seedDefaultCategories'), 'src/db/seed.ts must seed canonical default categories during production seed');
 
 // 2. Behavioral Idempotency Simulation (Rule 3.2-h: script must be idempotent and prove it is)
 interface SimulatedCategory {
@@ -102,5 +108,17 @@ const run2 = simulateSeed(run1.resultingCategories);
 assert(run2.created === 0, `Second run must create 0 categories (idempotency), but created ${run2.created}`);
 assert(run2.resultingCategories.length === totalAfterRun1, `Second run count must equal first run count (${totalAfterRun1}), got ${run2.resultingCategories.length}`);
 assert(run2.skipped === DEFAULT_FINANCIAL_CATEGORIES.length, 'Second run must skip all canonical categories');
+
+// 3. New Tenant Onboarding Simulation (Zero pre-existing categories)
+const freshTenantSeed1 = simulateSeed([]);
+assert(freshTenantSeed1.created === DEFAULT_FINANCIAL_CATEGORIES.length, 'Fresh tenant must create all default categories');
+assert(freshTenantSeed1.skipped === 0, 'Fresh tenant must skip 0 categories');
+assert(freshTenantSeed1.resultingCategories.length === DEFAULT_FINANCIAL_CATEGORIES.length, 'All default categories must exist');
+
+// Replaying onboarding seed on the same tenant (idempotent replay)
+const freshTenantSeed2 = simulateSeed(freshTenantSeed1.resultingCategories);
+assert(freshTenantSeed2.created === 0, 'Replay of onboarding seed must create 0 categories');
+assert(freshTenantSeed2.skipped === DEFAULT_FINANCIAL_CATEGORIES.length, 'Replay of onboarding seed must skip all categories');
+assert(freshTenantSeed2.resultingCategories.length === DEFAULT_FINANCIAL_CATEGORIES.length, 'Total category count must remain identical');
 
 console.log('financialCategoriesSeedRegression: PASS');

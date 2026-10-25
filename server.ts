@@ -1,5 +1,6 @@
 import { FinanceEngine } from './src/domain/finance/FinanceEngine';
 import { registerFinanceRoutes } from './src/server/financeRoutes';
+import { FinanceMasterDataAuthority } from './src/server/financeMasterDataAuthority';
 import { UnitOfWork } from './src/db/uow';
 import { AuditAction } from './src/types/enums';
 import { hasDriverHealthPermission } from './src/shared/security/driverHealthAuthorization';
@@ -387,6 +388,15 @@ async function startServer() {
             };
           })
       );
+
+      // Onboarding: seed canonical default financial categories for newly provisioned tenant
+      await FinanceMasterDataAuthority.seedDefaultCategories({
+        companyId: provisioned.companyId,
+        userId: provisioned.userId,
+        name: 'System Bootstrap',
+        role: 'ADMIN',
+        permissions: ['*'],
+      });
 
       res.status(201).json({ user: provisioned });
     } catch (error) {
