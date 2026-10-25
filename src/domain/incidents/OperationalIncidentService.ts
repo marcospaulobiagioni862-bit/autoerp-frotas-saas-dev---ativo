@@ -1,4 +1,5 @@
-import { Vehicle, Contract, Maintenance, VehicleDocument, DriverDocument, TrafficTicket, Driver, Insurance, Tracker } from '../../types/entities';
+import { Vehicle, Contract, Maintenance, VehicleDocument, DriverDocument, TrafficTicket, Driver, Insurance, Tracker, MaintenancePlan } from '../../types/entities';
+import type { MaintenanceAlertRule } from '../../server/maintenanceRuleAuthority';
 import { generateRentalControlSummary, RentalControlSummary } from '../operations/RentalControlCenterService';
 import { generateOperationalPendings, OperationalPendingItem } from '../operations/OperationalPendingService';
 
@@ -122,6 +123,8 @@ export interface IncidentInput {
   contracts?: Contract[];
   drivers?: Driver[];
   maintenances?: Maintenance[];
+  maintenancePlans?: MaintenancePlan[];
+  maintenanceAlertRule?: MaintenanceAlertRule;
   vehicleDocuments?: VehicleDocument[];
   driverDocuments?: DriverDocument[];
   tickets?: TrafficTicket[];
@@ -170,6 +173,7 @@ export function generateOperationalIncidentSummary(input: IncidentInput = {}): I
   const tickets = Array.isArray(input.tickets) ? input.tickets.filter(t => t && (!input.companyId || t.companyId === targetCompanyId)) : [];
   const insurances = Array.isArray(input.insurances) ? input.insurances.filter(i => i && (!input.companyId || i.companyId === targetCompanyId)) : [];
   const trackers = Array.isArray(input.trackers) ? input.trackers.filter(t => t && (!input.companyId || t.companyId === targetCompanyId)) : [];
+  const maintenancePlans = Array.isArray(input.maintenancePlans) ? input.maintenancePlans.filter(p => p && (!input.companyId || p.companyId === targetCompanyId)) : [];
 
   const existingIncidents = Array.isArray(input.incidents) ? input.incidents.filter(i => i && i.companyId === targetCompanyId) : [];
 
@@ -180,6 +184,8 @@ export function generateOperationalIncidentSummary(input: IncidentInput = {}): I
     contracts,
     drivers,
     maintenances,
+    maintenancePlans,
+    maintenanceAlertRule: input.maintenanceAlertRule,
     vehicleDocuments,
     driverDocuments,
     tickets,
@@ -192,6 +198,8 @@ export function generateOperationalIncidentSummary(input: IncidentInput = {}): I
     vehicles,
     contracts,
     maintenances,
+    maintenancePlans,
+    maintenanceAlertRule: input.maintenanceAlertRule,
     vehicleDocuments,
     driverDocuments,
     tickets,

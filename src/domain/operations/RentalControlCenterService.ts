@@ -1,4 +1,5 @@
-import { Vehicle, Contract, Maintenance, VehicleDocument, DriverDocument, TrafficTicket, Driver, Insurance, Tracker } from '../../types/entities';
+import { Vehicle, Contract, Maintenance, VehicleDocument, DriverDocument, TrafficTicket, Driver, Insurance, Tracker, MaintenancePlan } from '../../types/entities';
+import type { MaintenanceAlertRule } from '../../server/maintenanceRuleAuthority';
 import { VehicleStatus, ContractStatus } from '../../types/enums';
 import { generateRentalLifecycleSummary, RentalLifecycleItem } from '../../domain/rental/RentalLifecycleService';
 import { generateOperationalPendings, OperationalPendingItem } from './OperationalPendingService';
@@ -60,6 +61,8 @@ export interface RentalControlInput {
   contracts?: Contract[];
   drivers?: Driver[];
   maintenances?: Maintenance[];
+  maintenancePlans?: MaintenancePlan[];
+  maintenanceAlertRule?: MaintenanceAlertRule;
   vehicleDocuments?: VehicleDocument[];
   driverDocuments?: DriverDocument[];
   tickets?: TrafficTicket[];
@@ -90,6 +93,7 @@ export function generateRentalControlSummary(input: RentalControlInput = {}): Re
   const tickets = Array.isArray(input.tickets) ? input.tickets.filter(t => t && (!input.companyId || t.companyId === targetCompanyId)) : [];
   const insurances = Array.isArray(input.insurances) ? input.insurances.filter(i => i && (!input.companyId || i.companyId === targetCompanyId)) : [];
   const trackers = Array.isArray(input.trackers) ? input.trackers.filter(t => t && (!input.companyId || t.companyId === targetCompanyId)) : [];
+  const maintenancePlans = Array.isArray(input.maintenancePlans) ? input.maintenancePlans.filter(p => p && (!input.companyId || p.companyId === targetCompanyId)) : [];
 
   const lifecycleSummary = generateRentalLifecycleSummary({
     companyId: targetCompanyId,
@@ -108,6 +112,8 @@ export function generateRentalControlSummary(input: RentalControlInput = {}): Re
     vehicles,
     contracts,
     maintenances,
+    maintenancePlans,
+    maintenanceAlertRule: input.maintenanceAlertRule,
     vehicleDocuments,
     driverDocuments,
     tickets,

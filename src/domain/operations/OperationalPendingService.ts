@@ -257,10 +257,13 @@ export function generateOperationalPendings(data: OperationalPendingInput = {}):
 
   // 3.1. PREVENTIVE MAINTENANCE PLANS
   maintenancePlans.forEach(plan => {
-    if (!plan || plan.status === 'ARCHIVED' || plan.status === 'PAUSED' || plan.status === 'COMPLETED' || plan.status !== 'ACTIVE') {
+    if (!plan || plan.status !== 'ACTIVE') {
       return;
     }
     const veh = vehicleMap.get(plan.vehicleId);
+    if (!veh) {
+      return;
+    }
     const projection = plan.projectedStatus
       ? {
           projectedStatus: plan.projectedStatus,
@@ -269,7 +272,7 @@ export function generateOperationalPendings(data: OperationalPendingInput = {}):
           remainingKm: plan.remainingKm,
           remainingDays: plan.remainingDays,
         }
-      : projectMaintenancePlan(plan, Number(veh?.currentKm || 0), todayStr, data.maintenanceAlertRule);
+      : projectMaintenancePlan(plan, Number(veh.currentKm || 0), todayStr, data.maintenanceAlertRule);
 
     if (projection.projectedStatus !== 'OVERDUE' && projection.projectedStatus !== 'DUE') {
       return;

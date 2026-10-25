@@ -11,6 +11,7 @@ import {
   AuditLogRepository 
 } from '../../persistence/repositories/localRepositories';
 import { generateOperationalPendings } from '../operations/OperationalPendingService';
+import { MaintenancePreventiveClient } from '../../api/maintenancePreventiveClient';
 
 export type SystemHealthStatus = 'HEALTHY' | 'DEGRADED' | 'WARNING' | 'CRITICAL';
 export type AlertSeverity = 'P0' | 'P1' | 'P2' | 'P3';
@@ -99,7 +100,8 @@ export class PostGoLiveObservabilityService {
       allTickets,
       allInsurances,
       allTrackers,
-      allAuditLogs
+      allAuditLogs,
+      allMaintenancePlans
     ] = await Promise.all([
       vehRepo.findAll(),
       drvRepo.findAll(),
@@ -110,13 +112,15 @@ export class PostGoLiveObservabilityService {
       ticketRepo.findAll(),
       insRepo.findAll(),
       trackRepo.findAll(),
-      auditRepo.findAll()
+      auditRepo.findAll(),
+      MaintenancePreventiveClient.listPlans().catch(() => [])
     ]);
 
     const vehicles = allVehicles.filter(v => v && !v.isArchived && (!companyId || v.companyId === companyId));
     const drivers = allDrivers.filter(d => d && !d.isArchived && (!companyId || d.companyId === companyId));
     const contracts = allContracts.filter(c => c && !c.isArchived && (!companyId || c.companyId === companyId));
     const maintenances = allMaintenances.filter(m => m && (!companyId || m.companyId === companyId));
+    const maintenancePlans = allMaintenancePlans.filter(p => p && (!companyId || p.companyId === companyId));
     const vehicleDocuments = allVehicleDocs.filter(d => d && (!companyId || d.companyId === companyId));
     const driverDocuments = allDriverDocs.filter(d => d && (!companyId || d.companyId === companyId));
     const tickets = allTickets.filter(t => t && (!companyId || t.companyId === companyId));
@@ -126,9 +130,11 @@ export class PostGoLiveObservabilityService {
 
     // 2. Compute operational pendings
     const pendings = generateOperationalPendings({
+      companyId,
       vehicles,
       contracts,
       maintenances,
+      maintenancePlans,
       vehicleDocuments,
       driverDocuments,
       tickets,

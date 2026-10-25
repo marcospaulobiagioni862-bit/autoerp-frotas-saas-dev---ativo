@@ -11,6 +11,7 @@ import {
  TrackerRepository,
 } from '../../persistence/repositories/serverReadModelRepositories';
 import { generateManagementReport, ManagementReportData } from '../../domain/reports/ManagementReportsService';
+import { MaintenancePreventiveClient } from '../../api/maintenancePreventiveClient';
 import type { ReportAiSuggestedField, ReportAiSuggestionRecord } from '../../api/reportAiClient';
 import { VehicleStatus, DocumentStatus } from '../../types/enums';
 import { 
@@ -92,7 +93,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
  const insRepo = new InsuranceRepository();
  const trackRepo = new TrackerRepository();
 
- const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers] = await Promise.all([
+ const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers, maintenancePlans] = await Promise.all([
  vehRepo.findAll({ companyId }),
  contractRepo.findAll({ companyId }),
  maintRepo.findAll({ companyId }),
@@ -102,6 +103,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
  drvRepo.findAll({ companyId }),
  insRepo.findAll({ companyId }),
  trackRepo.findAll({ companyId }),
+ MaintenancePreventiveClient.listPlans().catch(() => []),
  ]);
 
  const data = generateManagementReport({
@@ -109,6 +111,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
  vehicles,
  contracts,
  maintenances,
+ maintenancePlans,
  vehicleDocuments,
  driverDocuments,
  tickets,

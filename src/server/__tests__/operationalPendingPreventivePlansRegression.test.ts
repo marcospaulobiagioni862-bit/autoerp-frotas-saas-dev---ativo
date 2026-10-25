@@ -140,66 +140,129 @@ assert(
   'Plano UPCOMING não deve gerar pendência operacional'
 );
 
-// 4. Caso Negativo PAUSED (plano pausado não gera pendência)
+// 4. Caso Negativo PAUSED (plano pausado já projetado como OVERDUE NUNCA gera pendência)
 const pausedPlan: MaintenancePlan = {
   ...overduePlan,
   id: 'plan-paused-km',
   status: 'PAUSED',
+  projectedStatus: 'OVERDUE',
+  projectedStage: 'OVERDUE_KM',
+  remainingKm: -8500,
 };
-const pausedPendings = generateOperationalPendings({
+const pausedPendingsServer = generateOperationalPendings({
   companyId,
   vehicles: [vehicle],
   maintenancePlans: [pausedPlan],
 });
-assert(
-  !pausedPendings.some((p) => p.entityId === pausedPlan.id),
-  'Plano com status PAUSED NUNCA deve gerar pendência'
+const pausedPendingsClient = generateOperationalPendingsClient({
+  companyId,
+  vehicles: [vehicle],
+  maintenancePlans: [pausedPlan],
+});
+assert.equal(
+  pausedPendingsServer.filter((p) => p.entityId === pausedPlan.id).length,
+  0,
+  'Plano com status PAUSED NUNCA deve gerar pendência no servidor'
+);
+assert.equal(
+  pausedPendingsClient.filter((p) => p.entityId === pausedPlan.id).length,
+  0,
+  'Plano com status PAUSED NUNCA deve gerar pendência no cliente'
 );
 
-// 5. Caso Negativo ARCHIVED (Requisito PH-114: plano removido NUNCA projeta pendência)
+// 5. Caso Negativo ARCHIVED (Requisito PH-114: plano removido já projetado como OVERDUE NUNCA projeta pendência)
 const archivedPlan: MaintenancePlan = {
   ...overduePlan,
   id: 'plan-archived-km',
   status: 'ARCHIVED',
+  projectedStatus: 'OVERDUE',
+  projectedStage: 'OVERDUE_KM',
+  remainingKm: -8500,
   removedAt: '2026-10-25T12:00:00.000Z',
   removedBy: 'user-1',
   removalReason: 'Veículo descontinuado da frota',
 };
 
-const archivedPendings = generateOperationalPendings({
+const archivedPendingsServer = generateOperationalPendings({
   companyId,
   vehicles: [vehicle],
   maintenancePlans: [archivedPlan],
 });
-assert(
-  !archivedPendings.some((p) => p.entityId === archivedPlan.id),
-  'Plano com status ARCHIVED NUNCA deve gerar pendência (invariante PH-114)'
+const archivedPendingsClient = generateOperationalPendingsClient({
+  companyId,
+  vehicles: [vehicle],
+  maintenancePlans: [archivedPlan],
+});
+assert.equal(
+  archivedPendingsServer.filter((p) => p.entityId === archivedPlan.id).length,
+  0,
+  'Plano com status ARCHIVED NUNCA deve gerar pendência no servidor (invariante PH-114)'
+);
+assert.equal(
+  archivedPendingsClient.filter((p) => p.entityId === archivedPlan.id).length,
+  0,
+  'Plano com status ARCHIVED NUNCA deve gerar pendência no cliente (invariante PH-114)'
 );
 
-// 6. Prova por Mutação da Invariante de ARCHIVED (Regra 3.2-e)
-// Se uma mutação afrouxar a regra e fingir que status ARCHIVED fosse processado como ACTIVE,
-// a geração criaria uma pendência indevida. Provamos aqui que nossa guarda barra estritamente
-// essa regressão.
-function simulateMutatedProjectionWithoutArchivedFilter(plan: MaintenancePlan): boolean {
-  // Simulando código com o defeito (mutação: falta da checagem status === 'ARCHIVED')
-  const mutatedHasBug = (plan.status as string) === 'ACTIVE' || (plan.status as string) === 'ARCHIVED';
-  return mutatedHasBug;
-}
-assert.equal(
-  simulateMutatedProjectionWithoutArchivedFilter(archivedPlan),
-  true,
-  'Prova de mutação: código sem a guarda aceitaria plano arquivado'
-);
-// E comprovamos que a função canônica REJEITA:
-const canonicalResult = generateOperationalPendings({
+// 6. Caso Negativo COMPLETED (plano concluído já projetado como OVERDUE NUNCA gera pendência)
+const completedPlan: MaintenancePlan = {
+  ...overduePlan,
+  id: 'plan-completed-km',
+  status: 'COMPLETED',
+  projectedStatus: 'OVERDUE',
+  projectedStage: 'OVERDUE_KM',
+  remainingKm: -8500,
+};
+
+const completedPendingsServer = generateOperationalPendings({
   companyId,
   vehicles: [vehicle],
-  maintenancePlans: [archivedPlan],
+  maintenancePlans: [completedPlan],
+});
+const completedPendingsClient = generateOperationalPendingsClient({
+  companyId,
+  vehicles: [vehicle],
+  maintenancePlans: [completedPlan],
 });
 assert.equal(
-  canonicalResult.filter((p) => p.entityId === archivedPlan.id).length,
+  completedPendingsServer.filter((p) => p.entityId === completedPlan.id).length,
   0,
-  'Invariante canônica: nenhum plano arquivado ultrapassa a guarda'
+  'Plano com status COMPLETED NUNCA deve gerar pendência no servidor'
+);
+assert.equal(
+  completedPendingsClient.filter((p) => p.entityId === completedPlan.id).length,
+  0,
+  'Plano com status COMPLETED NUNCA deve gerar pendência no cliente'
+);
+
+// 7. Caso Negativo: Veículo inexistente ou arquivado não deve gerar pendência fantasma (Observação b)
+const orphanPlan: MaintenancePlan = {
+  ...overduePlan,
+  id: 'plan-orphan-vehicle',
+  vehicleId: 'non-existent-or-archived-veh',
+  projectedStatus: 'OVERDUE',
+  projectedStage: 'OVERDUE_KM',
+  remainingKm: -8500,
+};
+const orphanPendingsServer = generateOperationalPendings({
+  companyId,
+  vehicles: [vehicle],
+  maintenancePlans: [orphanPlan],
+});
+const orphanPendingsClient = generateOperationalPendingsClient({
+  companyId,
+  vehicles: [vehicle],
+  maintenancePlans: [orphanPlan],
+});
+assert.equal(
+  orphanPendingsServer.filter((p) => p.entityId === orphanPlan.id).length,
+  0,
+  'Plano de veículo inexistente/arquivado NUNCA deve gerar pendência fantasma no servidor'
+);
+assert.equal(
+  orphanPendingsClient.filter((p) => p.entityId === orphanPlan.id).length,
+  0,
+  'Plano de veículo inexistente/arquivado NUNCA deve gerar pendência fantasma no cliente'
 );
 
 // 7. Isolamento de Tenant (Multi-Tenant Fail-Closed)

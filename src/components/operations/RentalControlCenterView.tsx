@@ -11,6 +11,7 @@ import {
  TrackerRepository,
 } from '../../persistence/repositories/serverReadModelRepositories';
 import { generateRentalControlSummary, RentalControlSummary, RentalControlItem, RentalControlOperationalStatus } from '../../domain/operations/RentalControlCenterService';
+import { MaintenancePreventiveClient } from '../../api/maintenancePreventiveClient';
 import { 
  ShieldAlert, 
  AlertTriangle, 
@@ -67,7 +68,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
  const insRepo = new InsuranceRepository();
  const trackRepo = new TrackerRepository();
 
- const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, drivers, tickets, insurances, trackers] = await Promise.all([
+ const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, drivers, tickets, insurances, trackers, maintenancePlans] = await Promise.all([
  vehRepo.findAll({ companyId }),
  contractRepo.findAll({ companyId }),
  maintRepo.findAll({ companyId }),
@@ -77,6 +78,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
  ticketRepo.findAll({ companyId }),
  insRepo.findAll({ companyId }),
  trackRepo.findAll({ companyId }),
+ MaintenancePreventiveClient.listPlans().catch(() => []),
  ]);
 
  const data = generateRentalControlSummary({
@@ -85,6 +87,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
  contracts,
  drivers,
  maintenances,
+ maintenancePlans,
  vehicleDocuments,
  driverDocuments,
  tickets,

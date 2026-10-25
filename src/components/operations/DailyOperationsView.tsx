@@ -11,6 +11,7 @@ import {
  TrackerRepository,
 } from '../../persistence/repositories/serverReadModelRepositories';
 import { generateDailyOperations, DailyOperationsSummary, DailyActionItem } from '../../domain/operations/DailyOperationsService';
+import { MaintenancePreventiveClient } from '../../api/maintenancePreventiveClient';
 import { 
  Calendar, 
  CheckCircle2, 
@@ -67,7 +68,7 @@ export const DailyOperationsView: React.FC<DailyOperationsViewProps> = ({
  const insRepo = new InsuranceRepository();
  const trackRepo = new TrackerRepository();
 
- const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers] = await Promise.all([
+ const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers, maintenancePlans] = await Promise.all([
  vehRepo.findAll({ companyId }),
  contractRepo.findAll({ companyId }),
  maintRepo.findAll({ companyId }),
@@ -77,6 +78,7 @@ export const DailyOperationsView: React.FC<DailyOperationsViewProps> = ({
  drvRepo.findAll({ companyId }),
  insRepo.findAll({ companyId }),
  trackRepo.findAll({ companyId }),
+ MaintenancePreventiveClient.listPlans().catch(() => []),
  ]);
 
  const data = generateDailyOperations({
@@ -84,6 +86,7 @@ export const DailyOperationsView: React.FC<DailyOperationsViewProps> = ({
  vehicles,
  contracts,
  maintenances,
+ maintenancePlans,
  vehicleDocuments,
  driverDocuments,
  tickets,

@@ -1,6 +1,6 @@
 import { generateOperationalTaskSummary, OperationalTask } from '../tasks/OperationalTaskService';
 import { OperationalIncident } from '../incidents/OperationalIncidentService';
-import { generateOperationalPendings, OperationalPendingItem } from '../operations/OperationalPendingService';
+import type { OperationalPendingItem } from '../operations/OperationalPendingService';
 
 export interface ProductivityMetrics {
   companyId: string;

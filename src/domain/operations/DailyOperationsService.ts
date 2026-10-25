@@ -1,4 +1,5 @@
-import { Vehicle, Contract, Maintenance, VehicleDocument, DriverDocument, TrafficTicket, Driver, Insurance, Tracker } from '../../types/entities';
+import { Vehicle, Contract, Maintenance, VehicleDocument, DriverDocument, TrafficTicket, Driver, Insurance, Tracker, MaintenancePlan } from '../../types/entities';
+import type { MaintenanceAlertRule } from '../../server/maintenanceRuleAuthority';
 import { VehicleStatus, ContractStatus, MaintenanceStatus, DocumentStatus, TicketStatus } from '../../types/enums';
 import { generateOperationalPendings, OperationalPendingItem } from './OperationalPendingService';
 
@@ -46,6 +47,8 @@ export interface DailyOperationsInput {
   vehicles?: Vehicle[];
   contracts?: Contract[];
   maintenances?: Maintenance[];
+  maintenancePlans?: MaintenancePlan[];
+  maintenanceAlertRule?: MaintenanceAlertRule;
   vehicleDocuments?: VehicleDocument[];
   driverDocuments?: DriverDocument[];
   tickets?: TrafficTicket[];
@@ -77,6 +80,7 @@ export function generateDailyOperations(input: DailyOperationsInput = {}): Daily
   const drivers = Array.isArray(input.drivers) ? input.drivers.filter(d => d && !d.isArchived && (!input.companyId || d.companyId === targetCompanyId)) : [];
   const insurances = Array.isArray(input.insurances) ? input.insurances.filter(i => i && (!input.companyId || i.companyId === targetCompanyId)) : [];
   const trackers = Array.isArray(input.trackers) ? input.trackers.filter(t => t && (!input.companyId || t.companyId === targetCompanyId)) : [];
+  const maintenancePlans = Array.isArray(input.maintenancePlans) ? input.maintenancePlans.filter(p => p && (!input.companyId || p.companyId === targetCompanyId)) : [];
 
   const vehiclesMap = new Map(vehicles.map(v => [v.id, v]));
   const driversMap = new Map(drivers.map(d => [d.id, d]));
@@ -89,6 +93,8 @@ export function generateDailyOperations(input: DailyOperationsInput = {}): Daily
     vehicles,
     contracts,
     maintenances,
+    maintenancePlans,
+    maintenanceAlertRule: input.maintenanceAlertRule,
     vehicleDocuments,
     driverDocuments,
     tickets,
