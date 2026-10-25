@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { db } from '../db/index';
 import { vehicleTaxCalendar, vehicles, accountPayables, financialCategories } from '../db/schema';
+import { FinancialAuthorizationService } from '../domain/finance/FinancialAuthorizationService';
+import type { AuthenticatedPrincipal } from './auth';
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
@@ -13,6 +15,16 @@ function toIsoDate(year: number, month: number, day: number): string {
 }
 
 export class VehicleTaxCalendarValidationError extends Error {}
+
+import officialSpData from './data/officialSpTaxCalendar.json';
+
+export interface OfficialSpYearSchedule {
+  source: string;
+  ipva: Record<string | number, { cotaUnica: string; parcelas: string[] }>;
+  licenciamento: Record<string | number, string>;
+}
+
+export const OFFICIAL_SP_SCHEDULES: Record<number, OfficialSpYearSchedule> = officialSpData as any;
 
 export type VehicleTaxType = 'IPVA_COTA_UNICA' | 'IPVA_PARCELADO' | 'LICENCIAMENTO';
 export const VEHICLE_TAX_TYPES: readonly VehicleTaxType[] = ['IPVA_COTA_UNICA', 'IPVA_PARCELADO', 'LICENCIAMENTO'];
@@ -162,72 +174,73 @@ export class VehicleTaxCalendarAuthority {
 
   /**
    * PH-091: Aplica tabela oficial de vencimentos de SP para todos os dígitos (0 a 9)
-   * calculada dinamicamente para o ano informado, sem datas hardcoded.
+   * homologada por ano com fonte oficial (Sefaz-SP e Detran-SP).
    */
   static async applyOfficialSpPreset(
     companyId: string,
     actorId: string,
     referenceYear: number,
-  ): Promise<{ appliedCount: number; referenceYear: number }> {
+  ): Promise<{ appliedCount: number; referenceYear: number; source: string }> {
     const year = assertYear(referenceYear);
+    const schedule = OFFICIAL_SP_SCHEDULES[year];
+    if (!schedule) {
+      throw new VehicleTaxCalendarValidationError(
+        `Calendário oficial de SP não homologado para o ano ${year}. Anos oficiais disponíveis: ${Object.keys(OFFICIAL_SP_SCHEDULES).join(', ')}`
+      );
+    }
 
-    // Regras de dias úteis base de SP para vencimentos (Janeiro para IPVA e meses escalonados para Licenciamento)
-    const spRules = [
-      { digit: 1, janDay: 11, licMonth: 7, licDay: 31 },
-      { digit: 2, janDay: 12, licMonth: 7, licDay: 31 },
-      { digit: 3, janDay: 15, licMonth: 8, licDay: 31 },
-      { digit: 4, janDay: 16, licMonth: 8, licDay: 31 },
-      { digit: 5, janDay: 17, licMonth: 9, licDay: 30 },
-      { digit: 6, janDay: 18, licMonth: 9, licDay: 30 },
-      { digit: 7, janDay: 19, licMonth: 10, licDay: 31 },
-      { digit: 8, janDay: 22, licMonth: 10, licDay: 31 },
-      { digit: 9, janDay: 23, licMonth: 11, licDay: 30 },
-      { digit: 0, janDay: 24, licMonth: 12, licDay: 31 },
-    ];
+    return await UnitOfWork.run(companyId, async (context: any) => {
+      const tx = context.getRawTransaction?.();
+      if (!tx) throw new Error('Vehicle tax calendar persistence unavailable');
+      const now = new Date().toISOString();
 
-    let appliedCount = 0;
-    for (const rule of spRules) {
-      // 1. Cota única (Janeiro)
-      await VehicleTaxCalendarAuthority.upsert(companyId, actorId, {
-        uf: 'SP',
-        referenceYear: year,
-        plateLastDigit: rule.digit,
-        taxType: 'IPVA_COTA_UNICA',
-        installment: 1,
-        dueDate: toIsoDate(year, 1, rule.janDay),
-        notes: 'Cota única com desconto (Sefaz-SP)',
-      });
-      appliedCount += 1;
+      let appliedCount = 0;
+      for (let digit = 0; digit <= 9; digit++) {
+        const ipvaData = schedule.ipva[digit];
+        const licDueDate = schedule.licenciamento[digit];
 
-      // 2. IPVA Parcelado (Janeiro a Maio, parcelas 1 a 5)
-      for (let m = 1; m <= 5; m++) {
-        const day = m === 2 ? Math.min(rule.janDay, 28) : rule.janDay;
-        await VehicleTaxCalendarAuthority.upsert(companyId, actorId, {
-          uf: 'SP',
-          referenceYear: year,
-          plateLastDigit: rule.digit,
-          taxType: 'IPVA_PARCELADO',
-          installment: m,
-          dueDate: toIsoDate(year, m, day),
-          notes: `Parcela ${m}/5 IPVA (Sefaz-SP)`,
-        });
+        // 1. Cota Única
+        const idUnica = randomUUID();
+        await tx.execute(sql`
+          INSERT INTO vehicle_tax_calendar
+            (id, company_id, uf, reference_year, plate_last_digit, tax_type, installment, due_date, notes, created_by, created_at, updated_at)
+          VALUES
+            (${idUnica}, ${companyId}, 'SP', ${year}, ${digit}, 'IPVA_COTA_UNICA', 1, ${ipvaData.cotaUnica}, ${`Cota única com desconto (${schedule.source})`}, ${actorId}, ${now}, ${now})
+          ON CONFLICT (company_id, uf, reference_year, plate_last_digit, tax_type, installment)
+          DO UPDATE SET due_date = EXCLUDED.due_date, notes = EXCLUDED.notes, updated_at = EXCLUDED.updated_at
+        `);
+        appliedCount += 1;
+
+        // 2. IPVA Parcelado (1 a 5)
+        for (let m = 0; m < 5; m++) {
+          const installmentNum = m + 1;
+          const idParc = randomUUID();
+          await tx.execute(sql`
+            INSERT INTO vehicle_tax_calendar
+              (id, company_id, uf, reference_year, plate_last_digit, tax_type, installment, due_date, notes, created_by, created_at, updated_at)
+            VALUES
+              (${idParc}, ${companyId}, 'SP', ${year}, ${digit}, 'IPVA_PARCELADO', ${installmentNum}, ${ipvaData.parcelas[m]}, ${`Parcela ${installmentNum}/5 IPVA (${schedule.source})`}, ${actorId}, ${now}, ${now})
+            ON CONFLICT (company_id, uf, reference_year, plate_last_digit, tax_type, installment)
+            DO UPDATE SET due_date = EXCLUDED.due_date, notes = EXCLUDED.notes, updated_at = EXCLUDED.updated_at
+          `);
+          appliedCount += 1;
+        }
+
+        // 3. Licenciamento
+        const idLic = randomUUID();
+        await tx.execute(sql`
+          INSERT INTO vehicle_tax_calendar
+            (id, company_id, uf, reference_year, plate_last_digit, tax_type, installment, due_date, notes, created_by, created_at, updated_at)
+          VALUES
+            (${idLic}, ${companyId}, 'SP', ${year}, ${digit}, 'LICENCIAMENTO', 1, ${licDueDate}, ${`Licenciamento obrigatório (${schedule.source})`}, ${actorId}, ${now}, ${now})
+          ON CONFLICT (company_id, uf, reference_year, plate_last_digit, tax_type, installment)
+          DO UPDATE SET due_date = EXCLUDED.due_date, notes = EXCLUDED.notes, updated_at = EXCLUDED.updated_at
+        `);
         appliedCount += 1;
       }
 
-      // 3. Licenciamento obrigatório
-      await VehicleTaxCalendarAuthority.upsert(companyId, actorId, {
-        uf: 'SP',
-        referenceYear: year,
-        plateLastDigit: rule.digit,
-        taxType: 'LICENCIAMENTO',
-        installment: 1,
-        dueDate: toIsoDate(year, rule.licMonth, rule.licDay),
-        notes: 'Licenciamento anual obrigatório (Detran-SP)',
-      });
-      appliedCount += 1;
-    }
-
-    return { appliedCount, referenceYear: year };
+      return { appliedCount, referenceYear: year, source: schedule.source };
+    });
   }
 
   /**
@@ -236,7 +249,7 @@ export class VehicleTaxCalendarAuthority {
    */
   static async generatePayablesForVehicle(
     companyId: string,
-    _actor: { userId: string; name?: string },
+    actor: AuthenticatedPrincipal | { userId: string; name?: string },
     input: {
       vehicleId: string;
       referenceYear: number;
@@ -256,10 +269,18 @@ export class VehicleTaxCalendarAuthority {
     }
 
     return await UnitOfWork.run(companyId, async (context: any) => {
+      // 1. Autorizador financeiro canônico (re-autentica no banco, checa active/tenant e loga auditoria)
+      await FinancialAuthorizationService.authorize(
+        actor.userId,
+        companyId,
+        'PAYABLE_CREATE',
+        context,
+      );
+
       const tx = context.getRawTransaction?.();
       if (!tx) throw new Error('Vehicle tax calendar persistence unavailable');
 
-      // 1. Obter veículo
+      // 2. Obter veículo
       const vehicleRows = await tx.select().from(vehicles)
         .where(and(eq(vehicles.companyId, companyId), eq(vehicles.id, vehicleId)))
         .limit(1);
@@ -275,7 +296,7 @@ export class VehicleTaxCalendarAuthority {
 
       const originId = `tax-ipva-${vehicleId}-${referenceYear}`;
 
-      // 2. Trava de duplicidade (409 Conflict): verificar se já existem títulos de IPVA para este veículo no ano
+      // 3. Trava de duplicidade (409 Conflict): verificar se já existem títulos ATIVOS de IPVA para este veículo no ano
       const existingPayables = await tx.select().from(accountPayables)
         .where(and(
           eq(accountPayables.companyId, companyId),
@@ -289,7 +310,22 @@ export class VehicleTaxCalendarAuthority {
         throw new Error('DUPLICATE_TAX_PAYABLES');
       }
 
-      // 3. Obter calendário correspondente ao veículo
+      // Se houver títulos cancelados do mesmo ano/período, desocupar o period_ref e installment_number
+      // para evitar colisão com os índices parciais unq_payable_recurring e unq_payable_installments
+      await tx.execute(sql`
+        UPDATE account_payables
+        SET period_ref = period_ref || '-CANCELLED-' || substr(id, 1, 8),
+            installment_number = NULL,
+            updated_at = NOW()
+        WHERE company_id = ${companyId}
+          AND origin_type = 'TAX_IPVA'
+          AND origin_id = ${originId}
+          AND cancelled_at IS NOT NULL
+          AND period_ref IS NOT NULL
+          AND period_ref NOT LIKE '%-CANCELLED-%'
+      `);
+
+      // 4. Obter calendário correspondente ao veículo
       const uf = vehicle.registrationState ? String(vehicle.registrationState).trim().toUpperCase() : 'SP';
       const calendarEntries = await tx.select().from(vehicleTaxCalendar)
         .where(and(
@@ -309,7 +345,7 @@ export class VehicleTaxCalendarAuthority {
         throw new VehicleTaxCalendarValidationError(`Calendário incompleto: esperado 5 parcelas de IPVA para ${uf} no ano ${referenceYear} (final ${digit}), encontrado ${calendarEntries.length}`);
       }
 
-      // 4. Obter categoria de despesa para IPVA / Documentação
+      // 5. Obter categoria de despesa para IPVA / Documentação (sem fallback arbitrário para categories[0])
       const categories = await tx.select().from(financialCategories)
         .where(and(eq(financialCategories.companyId, companyId), eq(financialCategories.type, 'EXPENSE')));
 
@@ -318,10 +354,6 @@ export class VehicleTaxCalendarAuthority {
         c.name.toLowerCase().includes('documenta') ||
         c.name.toLowerCase().includes('imposto'),
       );
-
-      if (!targetCategory && categories.length > 0) {
-        targetCategory = categories[0];
-      }
 
       if (!targetCategory) {
         const catId = `cat-tax-${randomUUID().slice(0, 8)}`;
@@ -339,7 +371,7 @@ export class VehicleTaxCalendarAuthority {
         targetCategory = createdCat;
       }
 
-      // 5. Gerar títulos
+      // 6. Gerar títulos
       const now = new Date().toISOString();
       const competenceDate = `${toIsoDate(referenceYear, 1, 1)}T00:00:00.000Z`;
       const createdPayables: any[] = [];
