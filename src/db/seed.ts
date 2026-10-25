@@ -29,8 +29,6 @@ export async function runProductionSeed() {
     companyId,
     userId: 'user-admin-001',
     name: 'System Admin',
-    role: 'ADMIN',
-    permissions: ['*'],
   });
 
   console.log('Production Seed Complete.');

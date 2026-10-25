@@ -394,8 +394,6 @@ async function startServer() {
         companyId: provisioned.companyId,
         userId: provisioned.userId,
         name: 'System Bootstrap',
-        role: 'ADMIN',
-        permissions: ['*'],
       });
 
       res.status(201).json({ user: provisioned });
