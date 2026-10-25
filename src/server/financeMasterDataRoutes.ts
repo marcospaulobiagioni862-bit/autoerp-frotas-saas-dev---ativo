@@ -193,6 +193,13 @@ export function registerFinanceMasterDataRoutes(app: Express): void {
     } catch (error) { sendError(res, error); }
   });
 
+  app.post('/api/finance/master-data/categories/seed-defaults', async (req, res) => {
+    const p = requirePrincipal(req, res); if (!p) return;
+    try {
+      res.status(200).json(await FinanceMasterDataAuthority.seedDefaultCategories(actorFrom(p)));
+    } catch (error) { sendError(res, error); }
+  });
+
   app.patch('/api/finance/master-data/categories/:id', async (req, res) => {
     const p = requirePrincipal(req, res); if (!p) return;
     try {

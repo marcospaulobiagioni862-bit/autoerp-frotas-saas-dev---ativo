@@ -74,6 +74,14 @@ export class FinanceMasterDataClient {
   static async createPaymentMethod(input:{name:string;type:string}): Promise<void> { await request('/api/finance/master-data/payment-methods', json('POST', input)); }
   static async setPaymentMethodActive(id:string, active:boolean): Promise<void> { await request(`/api/finance/master-data/payment-methods/${encodeURIComponent(id)}`, json('PATCH', { active })); }
   static async createCategory(input:{name:string;type:'INCOME'|'EXPENSE'|'BOTH';parentId?:string;dreGroup?:FinancialDreGroup}): Promise<void> { await request('/api/finance/master-data/categories', json('POST', input)); }
+  static async seedDefaultCategories(): Promise<{ created: number; skipped: number; total: number }> {
+    const res = record(await request('/api/finance/master-data/categories/seed-defaults', json('POST', {})));
+    return {
+      created: Number(res.created ?? 0),
+      skipped: Number(res.skipped ?? 0),
+      total: Number(res.total ?? 0),
+    };
+  }
   static async setCategoryDreGroup(id:string, dreGroup:FinancialDreGroup|null): Promise<void> { await request(`/api/finance/master-data/categories/${encodeURIComponent(id)}`, json('PATCH', { dreGroup })); }
   static async setCategoryActive(id:string, active:boolean): Promise<void> { await request(`/api/finance/master-data/categories/${encodeURIComponent(id)}`, json('PATCH', { active })); }
 }

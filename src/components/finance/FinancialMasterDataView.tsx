@@ -72,11 +72,7 @@ export const FinancialMasterDataView: React.FC = () => {
  <button type="button" disabled={addingDefaults} className="mt-2 rounded-lg border p-2 text-sm" onClick={() => void run(async () => {
  setAddingDefaults(true);
  try {
- const snapshot = await FinanceMasterDataClient.list();
- const names = new Set(snapshot.categories.map(item => item.name.trim().toLocaleLowerCase('pt-BR')));
- for (const item of DEFAULT_FINANCIAL_CATEGORIES) if (!names.has(item.name.toLocaleLowerCase('pt-BR'))) {
- await FinanceMasterDataClient.createCategory(item); names.add(item.name.toLocaleLowerCase('pt-BR'));
- }
+ await FinanceMasterDataClient.seedDefaultCategories();
  } finally { setAddingDefaults(false); }
  })}>Adicionar categorias padrão ausentes</button>
  <form className="mt-4 grid gap-2 md:grid-cols-4" onSubmit={(event) => { event.preventDefault(); void run(async () => { await FinanceMasterDataClient.createCategory({ name: categoryName.trim(), type: categoryType, parentId: categoryParentId || undefined, dreGroup: categoryDreGroup }); setCategoryName(''); setCategoryParentId(''); }); }}>

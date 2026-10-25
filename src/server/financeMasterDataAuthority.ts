@@ -1,4 +1,4 @@
-import { isFinancialDreGroup, isDreGroupCompatible, type FinancialDreGroup } from '../shared/utils/financialDreGroups';
+import { DEFAULT_FINANCIAL_CATEGORIES, isFinancialDreGroup, isDreGroupCompatible, type FinancialDreGroup } from '../shared/utils/financialDreGroups';
 import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
@@ -287,6 +287,55 @@ export class FinanceMasterDataAuthority {
       const item = rows[0];
       await audit(txContext, actor, 'FinancialCategory', id, AuditAction.UPDATE, existing, item);
       return item;
+    });
+  }
+
+  static async seedDefaultCategories(actor: FinanceMasterDataActor): Promise<{ created: number; skipped: number; total: number; categories: Array<{ id: string; name: string }> }> {
+    return UnitOfWork.run(actor.companyId, async (txContext: any) => {
+      await FinancialAuthorizationService.authorize(actor.userId, actor.companyId, 'FINANCIAL_MASTER_DATA_MANAGE', txContext);
+      const tx = txContext.getRawTransaction();
+      const existingRows = await tx.select({ id: financialCategories.id, name: financialCategories.name }).from(financialCategories)
+        .where(eq(financialCategories.companyId, actor.companyId));
+      const existingNames = new Set(existingRows.map((r: any) => String(r.name || '').trim().toLowerCase()));
+
+      let createdCount = 0;
+      let skippedCount = 0;
+      const allResultCategories = [...existingRows];
+
+      for (const item of DEFAULT_FINANCIAL_CATEGORIES) {
+        const normalized = item.name.trim().toLowerCase();
+        if (existingNames.has(normalized)) {
+          skippedCount++;
+          continue;
+        }
+
+        const now = new Date().toISOString();
+        const id = randomUUID();
+        const rows = await tx.insert(financialCategories).values({
+          id,
+          companyId: actor.companyId,
+          name: item.name,
+          type: item.type,
+          dreGroup: item.dreGroup || null,
+          parentId: null,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        }).returning();
+
+        const createdItem = rows[0];
+        existingNames.add(normalized);
+        allResultCategories.push({ id: createdItem.id, name: createdItem.name });
+        createdCount++;
+        await audit(txContext, actor, 'FinancialCategory', createdItem.id, AuditAction.CREATE, null, createdItem);
+      }
+
+      return {
+        created: createdCount,
+        skipped: skippedCount,
+        total: allResultCategories.length,
+        categories: allResultCategories,
+      };
     });
   }
 }
