@@ -34,31 +34,126 @@ function getContractShareSecret(): string {
   return secret;
 }
 
-function createContractShareToken(companyId: string, contractId: string, expiresInDays = 30): string {
+export function createContractShareToken(
+  companyId: string,
+  contractId: string,
+  expiresInDays = 30,
+  expiresInSeconds?: number
+): string {
   const secret = getContractShareSecret();
-  const exp = Math.floor(Date.now() / 1000) + (expiresInDays * 24 * 3600);
+  const now = Math.floor(Date.now() / 1000);
+  const exp = typeof expiresInSeconds === 'number'
+    ? now + expiresInSeconds
+    : now + (expiresInDays * 24 * 3600);
   const payload = Buffer.from(JSON.stringify({ companyId, contractId, exp })).toString('base64url');
   const signature = createHmac('sha256', secret).update(payload).digest('base64url');
   return `${payload}.${signature}`;
 }
 
-function verifyContractShareToken(token: string): { companyId: string; contractId: string; exp: number } | null {
+export function verifyContractShareToken(token: string): { companyId: string; contractId: string; exp: number } | null {
   try {
     const secret = getContractShareSecret();
+    if (!token || typeof token !== 'string') return null;
     const parts = token.split('.');
     if (parts.length !== 2) return null;
     const [payloadB64, signature] = parts;
+    if (!payloadB64 || !signature) return null;
     const expectedSignature = createHmac('sha256', secret).update(payloadB64).digest('base64url');
-    if (signature.length !== expectedSignature.length) return null;
-    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) return null;
+    const sigBuf = Buffer.from(signature, 'utf8');
+    const expSigBuf = Buffer.from(expectedSignature, 'utf8');
+    if (sigBuf.length !== expSigBuf.length || !timingSafeEqual(sigBuf, expSigBuf)) {
+      return null;
+    }
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
-    if (!payload || typeof payload !== 'object') return null;
-    if (typeof payload.exp !== 'number' || payload.exp < Math.floor(Date.now() / 1000)) return null;
-    if (typeof payload.companyId !== 'string' || typeof payload.contractId !== 'string') return null;
-    return payload;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    if (typeof payload.exp !== 'number' || !Number.isFinite(payload.exp) || payload.exp <= nowSeconds) {
+      return null;
+    }
+    if (typeof payload.companyId !== 'string' || !payload.companyId.trim()) return null;
+    if (typeof payload.contractId !== 'string' || !payload.contractId.trim()) return null;
+    return {
+      companyId: payload.companyId.trim(),
+      contractId: payload.contractId.trim(),
+      exp: payload.exp,
+    };
   } catch {
     return null;
   }
+}
+
+const PUBLIC_CONTRACT_ROUTES_REGISTERED = Symbol.for('AUTOERP_PUBLIC_CONTRACT_ROUTES_REGISTERED');
+
+export function registerPublicContractRoutes(app: Express): void {
+  if ((app as any)[PUBLIC_CONTRACT_ROUTES_REGISTERED]) {
+    return;
+  }
+  (app as any)[PUBLIC_CONTRACT_ROUTES_REGISTERED] = true;
+
+  // PH-069: Public contract PDF access via HMAC share token.
+  // Registered BEFORE the authenticated /api middleware so drivers without active session
+  // can view the contract from WhatsApp (wa.me) links. The share token is the sole authority.
+  app.get('/api/public/contracts/:id/pdf', async (req: Request, res: Response) => {
+    const rawId = req.params.id;
+    const contractId = typeof rawId === 'string' ? rawId.trim() : '';
+    if (!contractId) {
+      res.status(400).json({ error: 'ID do contrato inválido.' });
+      return;
+    }
+
+    const rawToken = req.query.token;
+    const token = typeof rawToken === 'string' ? rawToken.trim() : '';
+    if (!token) {
+      res.status(401).json({ error: 'Token de compartilhamento não fornecido.' });
+      return;
+    }
+
+    const verified = verifyContractShareToken(token);
+    if (!verified || verified.contractId !== contractId) {
+      res.status(401).json({ error: 'Token de compartilhamento inválido ou expirado.' });
+      return;
+    }
+
+    try {
+      const storage = createAttachmentStorageFromEnvironment();
+      const result = await UnitOfWork.run(verified.companyId, async (tx) => {
+        const contract = await tx.getContractRepo().findByIdForCompany(verified.companyId, contractId);
+        if (!contract || contract.isArchived) return null;
+
+        const signed = await tx.getContractArtifactRepo().findCurrentForContract(verified.companyId, contract.id, 'SIGNED_EVIDENCE', true);
+        const reviewed = await tx.getContractArtifactRepo().findCurrentForContract(verified.companyId, contract.id, 'REVIEWED_FINAL_PDF', true);
+        const generated = await tx.getContractArtifactRepo().findCurrentForContract(verified.companyId, contract.id, 'GENERATED_PDF', true);
+        const artifact = signed || reviewed || generated;
+        if (!artifact || !artifact.attachmentId) return { contract, attachment: null };
+
+        const attachment = await tx.getAttachmentRepo().findByIdForCompany(verified.companyId, artifact.attachmentId);
+        return { contract, attachment };
+      });
+
+      if (!result || !result.contract) {
+        res.status(404).json({ error: 'Contrato não encontrado.' });
+        return;
+      }
+      if (!result.attachment || !result.attachment.storageKey || result.attachment.contentState !== 'AVAILABLE') {
+        res.status(404).json({ error: 'PDF do contrato ainda não foi gerado ou está indisponível.' });
+        return;
+      }
+
+      const bytes = await storage.read(verified.companyId, result.attachment.storageKey, result.attachment.storageProvider as any);
+      const safeContractNumber = result.contract.contractNumber.replace(/[\r\n"]/g, '_');
+      res.setHeader('content-type', 'application/pdf');
+      res.setHeader('content-length', String(bytes.length));
+      res.setHeader('content-disposition', `inline; filename="Contrato_${safeContractNumber}.pdf"`);
+      res.setHeader('x-content-type-options', 'nosniff');
+      res.setHeader('cache-control', 'private, no-cache, no-store, must-revalidate');
+      res.setHeader('pragma', 'no-cache');
+      res.setHeader('expires', '0');
+      res.send(bytes);
+    } catch (error) {
+      console.error('AUTOERP_PUBLIC_CONTRACT_PDF_FAILURE', error);
+      res.status(500).json({ error: 'Falha ao carregar o PDF do contrato.' });
+    }
+  });
 }
 
 type ContractAction =
@@ -333,6 +428,8 @@ function forbidAuthorityFields(body: Record<string, unknown>, fields: string[]):
 }
 
 export function registerContractRoutes(app: Express): void {
+  registerPublicContractRoutes(app);
+
   app.get('/api/contracts', async (req: Request, res: Response) => {
     const principal = requireContractPrincipal(req, res, 'VIEW_CONTRACT');
     if (!principal) return;
@@ -1127,56 +1224,6 @@ export function registerContractRoutes(app: Express): void {
       res.json(result);
     } catch (error) {
       sendContractError(res, error);
-    }
-  });
-
-  app.get('/api/public/contracts/:id/pdf', async (req: Request, res: Response) => {
-    const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
-    if (!token) {
-      res.status(401).json({ error: 'Token de compartilhamento não fornecido.' });
-      return;
-    }
-    const verified = verifyContractShareToken(token);
-    if (!verified || verified.contractId !== req.params.id) {
-      res.status(401).json({ error: 'Token de compartilhamento inválido ou expirado.' });
-      return;
-    }
-
-    try {
-      const storage = createAttachmentStorageFromEnvironment();
-      const result = await UnitOfWork.run(verified.companyId, async (tx) => {
-        const contract = await tx.getContractRepo().findByIdForCompany(verified.companyId, req.params.id);
-        if (!contract || contract.isArchived) return null;
-
-        const signed = await tx.getContractArtifactRepo().findCurrentForContract(verified.companyId, contract.id, 'SIGNED_EVIDENCE', true);
-        const reviewed = await tx.getContractArtifactRepo().findCurrentForContract(verified.companyId, contract.id, 'REVIEWED_FINAL_PDF', true);
-        const generated = await tx.getContractArtifactRepo().findCurrentForContract(verified.companyId, contract.id, 'GENERATED_PDF', true);
-        const artifact = signed || reviewed || generated;
-        if (!artifact || !artifact.attachmentId) return { contract, attachment: null };
-
-        const attachment = await tx.getAttachmentRepo().findByIdForCompany(verified.companyId, artifact.attachmentId);
-        return { contract, attachment };
-      });
-
-      if (!result || !result.contract) {
-        res.status(404).json({ error: 'Contrato não encontrado.' });
-        return;
-      }
-      if (!result.attachment || !result.attachment.storageKey || result.attachment.contentState !== 'AVAILABLE') {
-        res.status(404).json({ error: 'PDF do contrato ainda não foi gerado ou está indisponível.' });
-        return;
-      }
-
-      const bytes = await storage.read(verified.companyId, result.attachment.storageKey, result.attachment.storageProvider as any);
-      const safeContractNumber = result.contract.contractNumber.replace(/[\r\n"]/g, '_');
-      res.setHeader('content-type', 'application/pdf');
-      res.setHeader('content-length', String(bytes.length));
-      res.setHeader('content-disposition', `inline; filename="Contrato_${safeContractNumber}.pdf"`);
-      res.setHeader('x-content-type-options', 'nosniff');
-      res.send(bytes);
-    } catch (error) {
-      console.error('AUTOERP_PUBLIC_CONTRACT_PDF_FAILURE', error);
-      res.status(500).json({ error: 'Falha ao carregar o PDF do contrato.' });
     }
   });
 }

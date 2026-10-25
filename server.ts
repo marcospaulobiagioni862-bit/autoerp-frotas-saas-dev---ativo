@@ -5,6 +5,7 @@ import { UnitOfWork } from './src/db/uow';
 import { AuditAction } from './src/types/enums';
 import { hasDriverHealthPermission } from './src/shared/security/driverHealthAuthorization';
 import { registerVehicleRoutes } from './src/server/vehicleRoutes';
+import { registerPublicContractRoutes } from './src/server/contractRoutes';
 import { requestCorrelationMiddleware } from './src/server/requestCorrelation';
 import { registerOpsHealthRoutes } from './src/server/opsHealthRoutes';
 import { createHash, randomUUID } from 'node:crypto';
@@ -642,6 +643,10 @@ async function startServer() {
     res.setHeader('Set-Cookie', buildExpiredSessionCookie(isSecureCookieRuntime()));
     res.status(204).end();
   });
+
+  // PH-069: Public contract PDF access via share token must be registered BEFORE
+  // the authenticated /api middleware so drivers without active session can view the contract.
+  registerPublicContractRoutes(app);
 
   // Middleware for injecting tenant context securely
   app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
