@@ -3,7 +3,6 @@ import { ModalContainer } from '../ui/ModalContainer';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
-import { CurrencyInput } from '../ui/CurrencyInput';
 import { FinanceSettlementClient, SettlementAccountOption } from '../../api/financeSettlementClient';
 import { AlertCircle, Landmark } from 'lucide-react';
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
@@ -16,8 +15,8 @@ interface QuickAccountModalProps {
 
 const ACCOUNT_TYPE_OPTIONS = [
   { value: 'CASH', label: 'Caixa Físico / Espécie' },
-  { value: 'CHECKING', label: 'Conta Corrente' },
-  { value: 'SAVINGS', label: 'Conta Poupança' },
+  { value: 'BANK', label: 'Conta Bancária (Corrente / Poupança)' },
+  { value: 'DIGITAL_ACCOUNT', label: 'Conta Digital (Fintech)' },
   { value: 'INVESTMENT', label: 'Aplicação / Investimento' },
 ];
 
@@ -28,7 +27,6 @@ export const QuickAccountModal: React.FC<QuickAccountModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [type, setType] = useState('CASH');
-  const [initialBalance, setInitialBalance] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,11 +46,9 @@ export const QuickAccountModal: React.FC<QuickAccountModalProps> = ({
       const created = await FinanceSettlementClient.quickCreateAccount({
         name: trimmedName,
         type,
-        initialBalance,
       });
       setName('');
       setType('CASH');
-      setInitialBalance(0);
       onAccountCreated(created);
       onClose();
     } catch (err) {
@@ -96,13 +92,6 @@ export const QuickAccountModal: React.FC<QuickAccountModalProps> = ({
             value={type}
             onChange={(e) => setType(e.target.value)}
             options={ACCOUNT_TYPE_OPTIONS}
-          />
-
-          <CurrencyInput
-            label="Saldo Inicial (R$)"
-            value={initialBalance}
-            onChangeValue={(numeric) => setInitialBalance(numeric)}
-            helperText="Saldo inicial com o qual a conta será aberta"
           />
         </div>
 

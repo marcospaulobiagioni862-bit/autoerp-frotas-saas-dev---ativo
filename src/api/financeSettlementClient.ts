@@ -15,7 +15,6 @@ export interface SettlementPaymentMethodOption {
 export interface QuickAccountInput {
   name: string;
   type?: string;
-  initialBalance?: number | string;
 }
 
 export interface SettlementOptions {

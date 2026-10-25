@@ -1,7 +1,8 @@
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
-import { AccountingRegime } from '../types/enums';
+import { AccountingRegime, FinancialAccountType } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import { FinanceMasterDataAuthority, type FinanceMasterDataActor } from './financeMasterDataAuthority';
 import { FinanceEngine } from '../domain/finance/FinanceEngine';
 import { ReceivableService } from '../domain/finance/ReceivableService';
 import { PayableService } from '../domain/finance/PayableService';
@@ -542,15 +543,22 @@ export function registerFinanceRoutes(app: Express): void {
     }
   });
 
-  // PH-087: Criação rápida inline de conta financeira no fluxo de baixa
+function resolveQuickAccountType(value: unknown): FinancialAccountType {
+  const upper = String(value || '').trim().toUpperCase();
+  if (upper === 'CHECKING' || upper === 'SAVINGS' || upper === 'BANK') return FinancialAccountType.BANK;
+  if (upper === 'DIGITAL_ACCOUNT' || upper === 'DIGITAL') return FinancialAccountType.DIGITAL_ACCOUNT;
+  if (upper === 'INVESTMENT') return FinancialAccountType.INVESTMENT;
+  if (upper === 'CREDIT_CARD') return FinancialAccountType.CREDIT_CARD;
+  if (upper === 'OTHER') return FinancialAccountType.OTHER;
+  return FinancialAccountType.CASH;
+}
+
+  // PH-087: Criação rápida inline de conta financeira no fluxo de baixa.
+  // Delega canonicamente para FinanceMasterDataAuthority.createAccount (com autorização,
+  // revalidação de usuário ativo no banco, auditoria e trava lógica de nome único)
+  // com initialBalance travado em 0 (abertura de caixa com saldo exige a tela oficial de Master Data).
   app.post('/api/finance/settlement-options/quick-account', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res, [
-      'PAYMENT_REGISTER',
-      'RECEIPT_REGISTER',
-      'PAYABLE_MUTATE',
-      'RECEIVABLE_MUTATE',
-      'FINANCIAL_MASTER_DATA_MANAGE',
-    ]);
+    const principal = requireFinancePrincipal(req, res, 'FINANCIAL_MASTER_DATA_MANAGE');
     if (!principal) return;
 
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
@@ -559,65 +567,30 @@ export function registerFinanceRoutes(app: Express): void {
       return;
     }
 
-    const allowedTypes = ['CASH', 'CHECKING', 'SAVINGS', 'INVESTMENT'];
-    const rawType = typeof req.body?.type === 'string' ? req.body.type.trim().toUpperCase() : 'CASH';
-    const type = allowedTypes.includes(rawType) ? rawType : 'CASH';
-
-    let initialBalance = 0;
-    if (req.body?.initialBalance !== undefined && req.body?.initialBalance !== null) {
-      if (typeof req.body.initialBalance === 'number') {
-        if (!Number.isFinite(req.body.initialBalance) || req.body.initialBalance < 0) {
-          res.status(400).json({ error: 'Saldo inicial inválido' });
-          return;
-        }
-        initialBalance = roundCurrency(req.body.initialBalance);
-      } else if (typeof req.body.initialBalance === 'string') {
-        const raw = req.body.initialBalance.trim();
-        if (raw !== '') {
-          const parsed = parseCurrencyDraft(raw);
-          if (Number.isNaN(parsed) || !Number.isFinite(parsed) || parsed < 0) {
-            res.status(400).json({ error: 'Saldo inicial inválido' });
-            return;
-          }
-          initialBalance = roundCurrency(parsed);
-        }
-      } else {
-        res.status(400).json({ error: 'Saldo inicial inválido' });
-        return;
-      }
-    }
+    const type = resolveQuickAccountType(req.body?.type);
 
     try {
-      const account = await UnitOfWork.run(principal.companyId, async (txContext) => {
-        const accountRepo = txContext.getAccountRepo();
-        if (!accountRepo.findAll || !accountRepo.create) {
-          throw new Error('Settlement repositories unavailable');
-        }
+      const actor: FinanceMasterDataActor = {
+        companyId: principal.companyId,
+        userId: principal.userId,
+        name: principal.name || principal.userId,
+      };
 
-        const existingAccounts = await accountRepo.findAll();
-        const duplicate = existingAccounts.find(
-          (a: any) => a.name.trim().toLowerCase() === name.toLowerCase() && a.status === 'ACTIVE'
-        );
-        if (duplicate) {
-          throw new Error('DUPLICATE_ACCOUNT_NAME');
-        }
-
-        const newAccount = await accountRepo.create({
-          id: `acc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          companyId: principal.companyId,
-          name,
-          type,
-          status: 'ACTIVE',
-          initialBalance: String(initialBalance),
-          currentBalance: String(initialBalance),
-        });
-
-        return newAccount;
+      const account = await FinanceMasterDataAuthority.createAccount(actor, {
+        name,
+        type,
+        initialBalance: 0,
+        status: 'ACTIVE',
       });
 
       res.status(201).json({ account });
     } catch (error) {
-      if (error instanceof Error && error.message === 'DUPLICATE_ACCOUNT_NAME') {
+      const message = error instanceof Error ? error.message : '';
+      if (message.startsWith('Acesso negado:')) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+      }
+      if (message.includes('já existe')) {
         res.status(409).json({ error: 'Já existe uma conta ativa com este nome.' });
         return;
       }
