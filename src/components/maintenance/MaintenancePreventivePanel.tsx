@@ -36,6 +36,7 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
  const[linkTargetPlan,setLinkTargetPlan]=useState<MaintenancePlan|null>(null),[linkWorkOrderId,setLinkWorkOrderId]=useState(''),[linkModalError,setLinkModalError]=useState<string|null>(null);
  const[rotateTargetTire,setRotateTargetTire]=useState<TireRecord|null>(null),[rotateKm,setRotateKm]=useState(''),[rotatePosition,setRotatePosition]=useState(''),[rotateIntervalKm,setRotateIntervalKm]=useState('10000'),[rotateDate,setRotateDate]=useState(''),[rotateModalError,setRotateModalError]=useState<string|null>(null);
  const[removeTargetTire,setRemoveTargetTire]=useState<TireRecord|null>(null),[removeKm,setRemoveKm]=useState(''),[removeDate,setRemoveDate]=useState(''),[removeStatus,setRemoveStatus]=useState<'REMOVED'|'REPLACED'|'DAMAGED'>('REMOVED'),[removeReason,setRemoveReason]=useState(''),[removeModalError,setRemoveModalError]=useState<string|null>(null);
+ const[removeTargetPlan,setRemoveTargetPlan]=useState<MaintenancePlan|null>(null),[removePlanReason,setRemovePlanReason]=useState(''),[removePlanModalError,setRemovePlanModalError]=useState<string|null>(null);
  const label=(id:string)=>{const v=vehicles.find(x=>x.id===id);return v?`${v.plate} — ${v.brand} ${v.model}`:id;};
  const load=async()=>{setLoading(true);setError(null);try{const[tpl,p,o,t,r]=await Promise.all([MaintenancePreventiveClient.listTemplates(),MaintenancePreventiveClient.listPlans(),MaintenancePreventiveClient.listOilChanges(),MaintenancePreventiveClient.listTires(),MaintenancePreventiveClient.getGlobalRule()]);setTemplates(tpl);setPlans(p);setOils(o);setTires(t);setGlobalRule(r);setRuleWarningKm(String(r.warningKm));setRuleUrgentKm(String(r.urgentKm));setRuleWarningDays(String(r.warningDays));setRuleUrgentDays(String(r.urgentDays));setRuleToleranceKm(String(r.toleranceKm));setRuleToleranceDays(String(r.toleranceDays));const first=vehicles[0];if(first){if(!planVehicle)setPlanVehicle(first.id);if(!applyVehicle||!vehicles.some(v=>v.id===applyVehicle))setApplyVehicle(first.id);if(!oilVehicle){setOilVehicle(first.id);setOilKm(String(first.currentKm));setOilNextKm(String(first.currentKm+10000));}if(!tireVehicle){setTireVehicle(first.id);setTireKm(String(first.currentKm));}}else if(applyVehicle)setApplyVehicle('');const activeTemplate=tpl.find(item=>item.active);if(!applyTemplate||!tpl.some(item=>item.id===applyTemplate&&item.active))setApplyTemplate(activeTemplate?.id||'');}catch(e){setError(e instanceof Error?e.message:'Falha ao carregar preventivas.');setTemplates([]);setPlans([]);setOils([]);setTires([]);setGlobalRule(null);}finally{setLoading(false);}};
  useEffect(()=>{void load();},[]);
@@ -158,6 +159,20 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
  setRemoveTargetTire(null);
  });
  };
+ const openRemovePlan=(p:MaintenancePlan)=>{
+ setRemoveTargetPlan(p);
+ setRemovePlanReason('');
+ setRemovePlanModalError(null);
+ };
+ const submitRemovePlan=async(e:React.FormEvent)=>{
+ e.preventDefault();
+ if(!removeTargetPlan)return;
+ setRemovePlanModalError(null);
+ await run(async()=>{
+ await MaintenancePreventiveClient.removePlan(removeTargetPlan.id,removePlanReason.trim()||undefined);
+ setRemoveTargetPlan(null);
+ });
+ };
  const occupyingTire=rotateTargetTire&&rotatePosition?tires.find(other=>other.vehicleId===rotateTargetTire.vehicleId&&other.id!==rotateTargetTire.id&&other.status==='ACTIVE'&&other.position===rotatePosition):null;
  return <div className="space-y-4">
  <div className="flex items-center justify-between"><div><h3 className="font-semibold flex items-center gap-2"><Wrench className="w-4 h-4"/>Preventivas, óleo e pneus</h3><p className="text-xs text-graphite-500">Operação diária separada das configurações da frota.</p></div><Button size="sm" variant="ghost" onClick={()=>void load()} icon={<RefreshCw className="w-4 h-4"/>}>Atualizar</Button></div>
@@ -189,7 +204,7 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
  <Input type="number" min="0" value={filterKm} onChange={e=>setFilterKm(e.target.value)} placeholder="Até X km restantes"/>
  <Input type="number" min="0" value={filterDays} onChange={e=>setFilterDays(e.target.value)} placeholder="Até X dias restantes"/>
  <div className="flex gap-2"><Input value={filterSearch} onChange={e=>setFilterSearch(e.target.value)} placeholder="Buscar plano, veículo..."/><Button size="sm" variant="ghost" type="button" onClick={()=>{setFilterVehicle('');setFilterCategory('');setFilterType('');setFilterAction('');setFilterStatus('');setFilterKm('');setFilterDays('');setFilterSearch('');}}>Limpar</Button></div>
- </div></div><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr><th className="p-3 text-left">Veículo</th><th className="p-3 text-left">Plano</th><th className="p-3 text-left">Próximo</th><th className="p-3 text-left">Status</th><th className="p-3 text-right">Ações</th></tr></thead><tbody>{displayedPlans.map(p=><tr key={p.id} className="border-t"><td className="p-3">{label(p.vehicleId)}</td><td className="p-3"><strong>{p.name}</strong><div className="text-graphite-500">{p.maintenanceType.replaceAll('_',' ')}</div><div className="text-[10px] text-graphite-400">{CATEGORY_LABELS[(templateByPlan(p)?.category||'GENERAL') as keyof typeof CATEGORY_LABELS]} • {ACTION_LABELS[(templateByPlan(p)?.actionType||'SERVICE') as keyof typeof ACTION_LABELS]}</div></td><td className="p-3 font-mono">{p.nextDueKm!==undefined?`${p.nextDueKm.toLocaleString('pt-BR')} km`:''}{p.nextDueKm!==undefined&&p.nextDueDate?' • ':''}{p.nextDueDate?formatDateBR(p.nextDueDate):''}</td><td className="p-3">{planBadge(p)}<div className="text-[10px] text-graphite-500 mt-1">{dueDetail(p)}</div></td><td className="p-3"><div className="flex justify-end gap-1"><Button size="sm" variant="ghost" onClick={()=>openLinkPlan(p)} icon={<Route className="w-3.5 h-3.5"/>}>Vincular OS</Button>{p.status==='ACTIVE'?<Button size="sm" variant="ghost" onClick={()=>void run(async()=>{await MaintenancePreventiveClient.pausePlan(p.id);})}>Pausar</Button>:p.status==='PAUSED'?<Button size="sm" onClick={()=>void run(async()=>{await MaintenancePreventiveClient.resumePlan(p.id);})}>Retomar</Button>:null}</div></td></tr>)}{displayedPlans.length===0&&<tr><td colSpan={5} className="p-6 text-center text-graphite-500">Nenhum plano corresponde aos filtros selecionados.</td></tr>}</tbody></table></div></Card>
+ </div></div><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr><th className="p-3 text-left">Veículo</th><th className="p-3 text-left">Plano</th><th className="p-3 text-left">Próximo</th><th className="p-3 text-left">Status</th><th className="p-3 text-right">Ações</th></tr></thead><tbody>{displayedPlans.map(p=><tr key={p.id} className="border-t"><td className="p-3">{label(p.vehicleId)}</td><td className="p-3"><strong>{p.name}</strong><div className="text-graphite-500">{p.maintenanceType.replaceAll('_',' ')}</div><div className="text-[10px] text-graphite-400">{CATEGORY_LABELS[(templateByPlan(p)?.category||'GENERAL') as keyof typeof CATEGORY_LABELS]} • {ACTION_LABELS[(templateByPlan(p)?.actionType||'SERVICE') as keyof typeof ACTION_LABELS]}</div></td><td className="p-3 font-mono">{p.nextDueKm!==undefined?`${p.nextDueKm.toLocaleString('pt-BR')} km`:''}{p.nextDueKm!==undefined&&p.nextDueDate?' • ':''}{p.nextDueDate?formatDateBR(p.nextDueDate):''}</td><td className="p-3">{planBadge(p)}<div className="text-[10px] text-graphite-500 mt-1">{dueDetail(p)}</div></td><td className="p-3"><div className="flex justify-end gap-1"><Button size="sm" variant="ghost" onClick={()=>openLinkPlan(p)} icon={<Route className="w-3.5 h-3.5"/>}>Vincular OS</Button>{p.status==='ACTIVE'?<Button size="sm" variant="ghost" onClick={()=>void run(async()=>{await MaintenancePreventiveClient.pausePlan(p.id);})}>Pausar</Button>:p.status==='PAUSED'?<Button size="sm" onClick={()=>void run(async()=>{await MaintenancePreventiveClient.resumePlan(p.id);})}>Retomar</Button>:null}<Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700 dark:text-red-400" onClick={()=>openRemovePlan(p)}>Remover</Button></div></td></tr>)}{displayedPlans.length===0&&<tr><td colSpan={5} className="p-6 text-center text-graphite-500">Nenhum plano corresponde aos filtros selecionados.</td></tr>}</tbody></table></div></Card>
  }
  {section==='vehicles'&&
  <div className="grid lg:grid-cols-2 gap-3"><Card padding="none"><div className="p-3 font-semibold">Histórico de óleo</div>{oils.slice(0,12).map(o=><div key={o.id} className="p-3 border-t text-xs flex justify-between"><span>{label(o.vehicleId)} • {o.oilBrand} {o.oilType}</span><span className="font-mono">{o.km.toLocaleString('pt-BR')} → {o.nextKm.toLocaleString('pt-BR')} km</span></div>)}</Card><Card padding="none"><div className="p-3 font-semibold">Pneus</div>{tires.slice(0,16).map(t=><div key={t.id} className="p-3 border-t text-xs flex items-center justify-between gap-2"><div><strong>{label(t.vehicleId)}</strong><div className="text-graphite-500">{TIRE_POSITION_LABELS[t.position]||'Posição não informada'} • {t.brand} {t.model} • {TIRE_STATUS_LABELS[t.status]||'Status não informado'}</div></div>{t.status==='ACTIVE'&&<div className="flex gap-1"><Button size="sm" variant="ghost" onClick={()=>openRotate(t)}>Rodízio</Button><Button size="sm" variant="danger" onClick={()=>openRemove(t)}>Remover</Button></div>}</div>)}</Card></div>}
@@ -294,6 +309,26 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
  </div>
  <div className="flex justify-end gap-2 pt-2">
  <Button type="button" variant="ghost" disabled={busy} onClick={()=>setRemoveTargetTire(null)}>Cancelar</Button>
+ <Button type="submit" variant="danger" isLoading={busy}>Confirmar remoção</Button>
+ </div>
+ </form></ModalContainer>}
+ {removeTargetPlan&&<ModalContainer isOpen={Boolean(removeTargetPlan)} onClose={()=>{if(!busy)setRemoveTargetPlan(null);}} title="Remover Plano Preventivo" maxWidth="md"><form onSubmit={submitRemovePlan} className="space-y-4">
+ <div className="rounded-lg bg-graphite-50 p-3 text-xs dark:bg-graphite-900/60 border border-graphite-200 dark:border-graphite-800 space-y-1">
+ <div className="font-semibold">{label(removeTargetPlan.vehicleId)}</div>
+ <div className="text-graphite-600 dark:text-graphite-400">Plano: <strong>{removeTargetPlan.name}</strong> ({removeTargetPlan.maintenanceType.replaceAll('_',' ')})</div>
+ {removeTargetPlan.nextDueKm!==undefined&&<div className="text-[11px] text-graphite-500 font-mono">Próxima manutenção prevista: {removeTargetPlan.nextDueKm.toLocaleString('pt-BR')} km</div>}
+ </div>
+ <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950/30 p-3 text-xs text-blue-800 dark:text-blue-300 space-y-1">
+ <p className="font-medium">O histórico de manutenções e Ordens de Serviço vinculadas a este veículo será preservado integralmente.</p>
+ <p className="text-[11px] opacity-90">Este plano será arquivado e deixará de gerar alertas preventivos ou ser recriado pela aplicação de templates à frota.</p>
+ </div>
+ {removePlanModalError&&<div className="p-2.5 rounded-lg border border-error-border bg-error-bg text-error-text text-xs">{removePlanModalError}</div>}
+ <div>
+ <label className="mb-1 block text-xs font-semibold">Motivo da remoção (opcional)</label>
+ <Input value={removePlanReason} onChange={e=>setRemovePlanReason(e.target.value)} placeholder="Ex.: Veículo não utiliza este componente, item descontinuado..."/>
+ </div>
+ <div className="flex justify-end gap-2 pt-2">
+ <Button type="button" variant="ghost" disabled={busy} onClick={()=>setRemoveTargetPlan(null)}>Cancelar</Button>
  <Button type="submit" variant="danger" isLoading={busy}>Confirmar remoção</Button>
  </div>
  </form></ModalContainer>}

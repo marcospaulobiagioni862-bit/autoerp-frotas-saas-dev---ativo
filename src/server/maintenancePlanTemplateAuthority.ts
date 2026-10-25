@@ -121,6 +121,8 @@ async function applyToVehicleInContext(context:any,p:AuthenticatedPrincipal,vehi
   const templates=templateRows.map(mapTemplate);
   const now=new Date().toISOString(),baseDate=now.slice(0,10);let created=0;
   for(const t of templates){
+    const existing=rows(await tx.execute(sql`SELECT id,status FROM maintenance_plans WHERE company_id=${p.companyId} AND vehicle_id=${vehicle.id} AND template_id=${t.id} LIMIT 1`))[0];
+    if(existing)continue;
     const nextKm=t.intervalKm===undefined?undefined:vehicle.currentKm+t.intervalKm;
     const nextDate=t.intervalDays===undefined?undefined:new Date(Date.parse(baseDate+'T00:00:00Z')+t.intervalDays*86400000).toISOString().slice(0,10);
     const id=randomUUID();
@@ -158,7 +160,7 @@ export class MaintenancePlanTemplateAuthority {
     const savedRow=rows(await tx.execute(sql`UPDATE maintenance_plan_templates SET name=${next.name},category=${next.category},action_type=${next.actionType},interval_km=${next.intervalKm??null},interval_days=${next.intervalDays??null},priority=${next.priority},estimated_cost=${next.estimatedCost??null},active=${next.active},notes=${next.notes??null},updated_at=${next.updatedAt} WHERE company_id=${p.companyId} AND id=${id} RETURNING *`))[0];
     if(!savedRow)throw new MaintenanceTemplateNotFoundError('Plano padrão não encontrado');
     if(next.active){
-      const plans=rows(await tx.execute(sql`SELECT p.id,p.last_execution_km,p.last_execution_date,v.current_km FROM maintenance_plans p JOIN vehicles v ON v.company_id=p.company_id AND v.id=p.vehicle_id WHERE p.company_id=${p.companyId} AND p.template_id=${id} AND p.status<>'COMPLETED'`));
+      const plans=rows(await tx.execute(sql`SELECT p.id,p.last_execution_km,p.last_execution_date,v.current_km FROM maintenance_plans p JOIN vehicles v ON v.company_id=p.company_id AND v.id=p.vehicle_id WHERE p.company_id=${p.companyId} AND p.template_id=${id} AND p.status NOT IN ('COMPLETED', 'ARCHIVED')`));
       for(const plan of plans){
         const baseKm=plan.last_execution_km===null||plan.last_execution_km===undefined?Number(plan.current_km):Number(plan.last_execution_km);
         const baseDate=plan.last_execution_date?dateOnly(plan.last_execution_date):next.updatedAt.slice(0,10);

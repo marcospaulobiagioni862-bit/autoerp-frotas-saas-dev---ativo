@@ -32,6 +32,14 @@ try{
   await mustReject(x=>x.projectedStatus='LATE','unknown projected status');
   await mustReject(x=>x.projectedStage='D3','unknown due stage');
 
+  mock({items:[{...basePlan,status:'ARCHIVED',projectedStatus:'ARCHIVED',removedAt:'2026-10-25T12:00:00.000Z',removedBy:'u1',removalReason:'Veículo descontinuou peça'}]});
+  const [archived]=await MaintenancePreventiveClient.listPlans();
+  if(archived.status!=='ARCHIVED'||archived.projectedStatus!=='ARCHIVED'||archived.removalReason!=='Veículo descontinuou peça')throw new Error('Canonical archived plan was not preserved');
+
+  mock({item:{...basePlan,status:'ARCHIVED',projectedStatus:'ARCHIVED',removedAt:'2026-10-25T12:00:00.000Z',removedBy:'u1',removalReason:'Teste remoção'}});
+  const removedPlan=await MaintenancePreventiveClient.removePlan('p1','Teste remoção');
+  if(removedPlan.status!=='ARCHIVED'||removedPlan.removalReason!=='Teste remoção')throw new Error('MaintenancePreventiveClient.removePlan failed to preserve archived response');
+
   const policyRule={warningKm:2500,urgentKm:800,warningDays:20,urgentDays:7,toleranceKm:300,toleranceDays:1};
   const warningProjection=projectMaintenancePlan(basePlan as any,9000,'2026-08-01',policyRule);
   if(warningProjection.projectedStage!=='KM1000'||warningProjection.remainingKm!==2000)throw new Error('Configured KM warning threshold was ignored');
