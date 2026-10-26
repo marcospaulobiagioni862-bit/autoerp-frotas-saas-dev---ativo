@@ -162,8 +162,11 @@ async function loadApprovedVehicleDraft(context: any, principal: AuthenticatedPr
   return { documentType: expectedType, fields };
 }
 function scheduleDocumentAiExtraction(companyId:string,extractionId:string):void {
-  setImmediate(()=>{ void dispatchDocumentAiExtractionFromEnvironment(companyId,extractionId,`vehicle-intake-${extractionId}`).catch(()=>{
-    console.error('AUTOERP_VEHICLE_DOCUMENT_AI_DISPATCH_FAILURE');
+  setImmediate(()=>{ void dispatchDocumentAiExtractionFromEnvironment(companyId,extractionId,`vehicle-intake-${extractionId}`).catch(async (error)=>{
+    console.error('AUTOERP_VEHICLE_DOCUMENT_AI_DISPATCH_FAILURE', error);
+    try {
+      await DocumentAiQueueService.failPendingExtraction(companyId, extractionId, 'PROVIDER_UNAVAILABLE');
+    } catch {}
   }); });
 }
 function sendError(res: Response, error: unknown): void {

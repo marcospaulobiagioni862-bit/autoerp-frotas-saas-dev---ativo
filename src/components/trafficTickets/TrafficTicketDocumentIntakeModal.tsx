@@ -131,7 +131,9 @@ export function TrafficTicketDocumentIntakeModal({isOpen,onClose,onCreated}:{isO
   if(waitStartRef.current===null){
    waitStartRef.current=Date.now();
   }
-  const timer=window.setInterval(()=>{
+  const setIntervalFn=typeof window!=='undefined'&&typeof window.setInterval==='function'?window.setInterval:setInterval;
+  const clearIntervalFn=typeof window!=='undefined'&&typeof window.clearInterval==='function'?window.clearInterval:clearInterval;
+  const timer=setIntervalFn(()=>{
    if(waitStartRef.current&&Date.now()-waitStartRef.current>60_000){
     setTimedOut(true);
     setError('Leitura por IA indisponível ou demorando mais que o esperado. Tente de novo ou chame o suporte.');
@@ -139,7 +141,7 @@ export function TrafficTicketDocumentIntakeModal({isOpen,onClose,onCreated}:{isO
    }
    if(!busy)void refresh();
   },4000);
-  return()=>window.clearInterval(timer);
+  return()=>clearIntervalFn(timer);
  },[isOpen,attachmentId,extraction?.status,busy,timedOut]);
 
  const start=async()=>{setBusy(true);setError(null);try{const intake=await TrafficTicketDocumentIntakeClient.create(`traffic-ticket-ui-${crypto.randomUUID()}`);setIntakeId(intake.id);setMessage('Pré-cadastro criado. Envie o auto ou notificação para leitura.');}catch(e){setError(e instanceof Error?e.message:'Falha ao iniciar leitura.');}finally{setBusy(false);}};

@@ -411,8 +411,24 @@ export class DocumentAiAuthorityIntegrationRunner {
           eq(auditLogs.action, 'UPDATE'),
         ));
       });
-      assert(reviewAudits.length === 1, `expected one review audit, found ${reviewAudits.length}`);
-      const reviewChanges = JSON.parse(reviewAudits[0].changes || '{}');
+      // Decisão canônica de auditoria (PH-077):
+      // Existem 2 registros legítimos de UPDATE no ciclo de vida desta extração:
+      // 1) Fail-fast de sistema: transição PENDING -> FAILED no dispatch imediato quando runtime desabilitado (AI_EXTRACTION_FAIL_DIRECT)
+      // 2) Aprovação humana: transição para APPROVED via POST /review por revisor autenticado (AI_EXTRACTION_REVIEWED)
+      assert(reviewAudits.length === 2, `expected two update audits (fail-fast dispatch + human review), found ${reviewAudits.length}`);
+
+      const failFastAudit = reviewAudits.find((a: any) => {
+        const parsed = JSON.parse(JSON.parse(a.changes || '{}').newState || '{}');
+        return parsed.event === 'AI_EXTRACTION_FAIL_DIRECT';
+      });
+      assert(Boolean(failFastAudit), 'fail-fast dispatch audit record missing from audit log');
+
+      const humanReviewAudit = reviewAudits.find((a: any) => {
+        const parsed = JSON.parse(JSON.parse(a.changes || '{}').newState || '{}');
+        return parsed.event === 'AI_EXTRACTION_REVIEWED' || parsed.status === 'APPROVED';
+      });
+      assert(Boolean(humanReviewAudit), 'human review approval audit record missing from audit log');
+      const reviewChanges = JSON.parse(humanReviewAudit.changes || '{}');
       const auditedNewState = JSON.parse(reviewChanges.newState || '{}');
       assert(auditedNewState.status === 'APPROVED', 'approved status missing from review audit');
       assert(auditedNewState.reviewedBy === adminAId, 'review actor missing from audit');

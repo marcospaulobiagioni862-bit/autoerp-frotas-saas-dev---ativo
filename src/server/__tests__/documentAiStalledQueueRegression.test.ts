@@ -220,7 +220,14 @@ async function runTests(): Promise<void> {
     SELECT id, status, failure_code FROM document_ai_extractions WHERE company_id = ${companyId} AND id = 'ext-dispatch-dis'
   `);
   const disExtRow = checkDispatchExtraction.rows?.[0] ?? checkDispatchExtraction[0];
-  assert.equal(disExtRow.status, 'PENDING', 'Extração não sofre mutação imediata no dispatch disabled (evita poluição de auditoria)');
+  assert.equal(disExtRow.status, 'FAILED', 'Extração despachada com runtime desabilitado deve falhar imediatamente');
+  assert.equal(disExtRow.failure_code, 'RUNTIME_DISABLED', 'Failure code deve ser RUNTIME_DISABLED');
+
+  const checkDriverIntake: any = await db.execute(sql`
+    SELECT id, status FROM driver_document_intakes WHERE company_id = ${companyId} AND id = 'driver-intake-dis'
+  `);
+  const disIntakeRow = checkDriverIntake.rows?.[0] ?? checkDriverIntake[0];
+  assert.equal(disIntakeRow.status, 'FAILED', 'Intake do motorista deve ser sincronizado imediatamente para FAILED');
 
   // =========================================================================
   // 5. Alerta de Runtime (Item d)

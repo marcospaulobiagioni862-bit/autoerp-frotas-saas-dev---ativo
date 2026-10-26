@@ -172,6 +172,11 @@ export async function dispatchDocumentAiExtractionFromEnvironment(
         'AUTOERP_DOCUMENT_AI_RUNTIME_UNAVAILABLE_DISPATCH',
         JSON.stringify({ companyId, extractionId, reason: 'RUNTIME_DISABLED' }),
       );
+      try {
+        await DocumentAiQueueService.failPendingExtraction(companyId, extractionId, 'RUNTIME_DISABLED');
+      } catch {
+        // Fallback or hermetic tests where DB may not be seeded
+      }
       return { state: 'DISABLED' };
     }
     throw error;

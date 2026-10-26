@@ -180,9 +180,13 @@ async function suggestions(context:any,principal:AuthenticatedPrincipal,intakeId
 }
 function schedule(companyId:string,extractionId:string):void{
   setImmediate(()=>{
-    void dispatchDocumentAiExtractionFromEnvironment(companyId,extractionId,`traffic-ticket-intake-${extractionId}`).catch(()=>{
-      console.error('AUTOERP_TRAFFIC_TICKET_DOCUMENT_AI_DISPATCH_FAILURE');
-    });
+    void dispatchDocumentAiExtractionFromEnvironment(companyId,extractionId,`traffic-ticket-intake-${extractionId}`)
+      .catch(async (error)=>{
+        console.error('AUTOERP_TRAFFIC_TICKET_DOCUMENT_AI_DISPATCH_FAILURE', error);
+        try {
+          await DocumentAiQueueService.failPendingExtraction(companyId, extractionId, 'PROVIDER_UNAVAILABLE');
+        } catch {}
+      });
   });
 }
 function uniqueConstraint(error:unknown):string|undefined{
