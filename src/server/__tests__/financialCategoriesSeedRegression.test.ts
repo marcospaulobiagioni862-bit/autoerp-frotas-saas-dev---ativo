@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
@@ -27,6 +27,9 @@ const routesSrc = readFileSync(resolve(process.cwd(), 'src/server/financeMasterD
 const clientSrc = readFileSync(resolve(process.cwd(), 'src/api/financeMasterDataClient.ts'), 'utf8');
 const uiSrc = readFileSync(resolve(process.cwd(), 'src/components/finance/FinancialMasterDataView.tsx'), 'utf8');
 const serverSrc = readFileSync(resolve(process.cwd(), 'server.ts'), 'utf8');
+const bootstrapRoutesPath = resolve(process.cwd(), 'src/server/bootstrapRoutes.ts');
+const bootstrapSrc = existsSync(bootstrapRoutesPath) ? readFileSync(bootstrapRoutesPath, 'utf8') : '';
+const combinedBootstrapSrc = `${serverSrc}\n${bootstrapSrc}`;
 const seedSrc = readFileSync(resolve(process.cwd(), 'src/db/seed.ts'), 'utf8');
 
 const requiredCategories = [
@@ -58,8 +61,8 @@ assert(clientSrc.includes('seedDefaultCategories'), 'FinanceMasterDataClient mus
 assert(uiSrc.includes('FinanceMasterDataClient.seedDefaultCategories()'), 'UI button must invoke authoritative seedDefaultCategories endpoint');
 
 // Onboarding e fail-safe
-assert(serverSrc.includes('FinanceMasterDataAuthority.seedDefaultCategories'), 'server.ts bootstrap must call canonical seedDefaultCategories');
-assert(serverSrc.includes('AUTOERP_BOOTSTRAP_CATEGORIES_SEED_WARNING'), 'server.ts bootstrap must wrap category seed in try/catch to protect account provisioning');
+assert(combinedBootstrapSrc.includes('FinanceMasterDataAuthority.seedDefaultCategories'), 'bootstrap endpoint (server.ts / bootstrapRoutes.ts) must call canonical seedDefaultCategories');
+assert(combinedBootstrapSrc.includes('AUTOERP_BOOTSTRAP_CATEGORIES_SEED_WARNING'), 'bootstrap endpoint (server.ts / bootstrapRoutes.ts) must wrap category seed in try/catch to protect account provisioning');
 assert(seedSrc.includes('FinanceMasterDataAuthority.seedDefaultCategories'), 'src/db/seed.ts must call canonical seedDefaultCategories');
 
 // 2. Execução REAL da Idempotência contra Banco de Dados (Regra 3.2-h)
