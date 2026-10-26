@@ -38,6 +38,28 @@ function optional(value: unknown, max = 180): string | null {
   if(clean.length>max) throw new Error('VALIDATION');
   return clean || null;
 }
+function optionalPhone(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, '');
+  const localLength = digits.length === 10 || digits.length === 11;
+  const countryLength = (digits.length === 12 || digits.length === 13) && digits.startsWith('55');
+  if ((!localLength && !countryLength) || /^(\d)\1+$/.test(digits)) {
+    throw new Error('VALIDATION');
+  }
+  return digits;
+}
+function optionalZipCode(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, '');
+  if (!/^\d{8}$/.test(digits)) {
+    throw new Error('VALIDATION');
+  }
+  return digits;
+}
 function required(value: unknown, max = 180): string {
   const clean=optional(value,max);
   if(!clean) throw new Error('VALIDATION');
@@ -73,15 +95,15 @@ export function registerCompanyProfileRoutes(app: Express): void {
         tradeName: optional(body.tradeName,180),
         document: optional(body.document,30),
         email: optional(body.email,180),
-        phone: optional(body.phone,40),
-        whatsapp: optional(body.whatsapp,40),
+        phone: optionalPhone(body.phone),
+        whatsapp: optionalPhone(body.whatsapp),
         addressStreet: optional(address.street,180),
         addressNumber: optional(address.number,40),
         addressComplement: optional(address.complement,120),
         addressNeighborhood: optional(address.neighborhood,120),
         addressCity: optional(address.city,120),
         addressState: optional(address.state,40),
-        addressZipCode: optional(address.zipCode,20),
+        addressZipCode: optionalZipCode(address.zipCode),
         legalRepresentativeName: optional(legal.name,180),
         legalRepresentativeCpf: optional(legal.cpf,30),
         updatedAt: now,

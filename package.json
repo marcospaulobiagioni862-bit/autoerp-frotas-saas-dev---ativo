@@ -87,6 +87,7 @@
     "test:payable-installment-order": "tsx src/domain/finance/__tests__/payableInstallmentOrderTestRunner.ts",
     "test:traffic-ticket-cancellation-guard": "tsx src/domain/finance/__tests__/trafficTicketFinancialCancellationGuardTestRunner.ts",
     "test:traffic-ticket-service": "tsx src/domain/services/__tests__/trafficTicketTestRunner.ts",
+    "test:company-profile-sanitization": "tsx src/server/__tests__/companyProfilePhoneZipSanitizationRegression.ts",
     "test:server-bootstrap": "tsx src/server/__tests__/bootstrapTestRunner.ts",
     "test:contract-insurance-snapshot": "tsx src/server/__tests__/contractVehicleInsuranceSnapshotTestRunner.ts",
     "test:contract-tracker-snapshot": "tsx src/server/__tests__/contractVehicleTrackerSnapshotTestRunner.ts",

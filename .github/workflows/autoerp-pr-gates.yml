@@ -755,6 +755,10 @@ jobs:
       - name: Browser tab branding and multitenant title invariants
         run: npm run test:browser-tab-branding
 
+      # PH-131: sanitizacao e validacao de telefone/CEP da empresa e idempotencia da migration 0096.
+      - name: Company profile phone and zipCode sanitization invariants
+        run: npm run test:company-profile-sanitization
+
       - name: Vitest suites (*.spec.ts)
         # AUTOERP-40: o Vitest foi adotado em 2026-10-06 (f2b53597) e ficou FORA do portao.
         # As suites .spec.ts passavam em 7s sem nunca proteger nada - garantia falsa, o mesmo
