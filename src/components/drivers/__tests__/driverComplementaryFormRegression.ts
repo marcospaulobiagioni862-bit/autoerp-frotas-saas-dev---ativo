@@ -447,7 +447,15 @@ try {
   assert.ok(updatedHealthProfile, 'Health profile must be recorded in database');
   assert.equal(updatedHealthProfile.controlledMedications, 'Clonazepam 2mg');
   assert.ok(updatedHealthProfile.lgpdConsentAt, 'lgpdConsentAt must be populated in database');
-  assert.notEqual(updatedHealthProfile.lgpdConsentAt, '2020-01-01T00:00:00.000Z', 'Must reject client-forged consent date');
+  const consentRaw = String(updatedHealthProfile.lgpdConsentAt);
+  const consentIso = consentRaw.includes('Z') || consentRaw.includes('+')
+    ? consentRaw
+    : consentRaw.replace(' ', 'T') + 'Z';
+  const consentTime = new Date(consentIso).getTime();
+  assert.ok(
+    !isNaN(consentTime) && Math.abs(Date.now() - consentTime) < 60_000,
+    `Server must enforce authoritative current timestamp (now), rejecting client-forged date. Recorded: ${updatedHealthProfile.lgpdConsentAt}`
+  );
   assert.equal(updatedHealthProfile.lgpdConsentVersion, '1.0', 'lgpdConsentVersion must strictly be authoritative 1.0, rejecting forged client version');
   console.log('✓ Internal PUT /api/drivers/:id/health persisted health data and enforced authoritative server consent date and version 1.0.');
 
