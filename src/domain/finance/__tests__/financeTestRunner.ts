@@ -1495,9 +1495,24 @@ export class FinanceTestRunner {
   }
 }
 
-if (typeof process !== 'undefined' && process.argv && process.argv[0]) {
+// AUTOERP-40: a guarda anterior era `process.argv && process.argv[0]`, verdadeira
+// em QUALQUER processo Node, nao apenas quando este arquivo e o entry point. Quem
+// importava este modulo (securityTestRunner, persistenceTestRunner,
+// SystemIntegrityAuditService.test, EnterpriseConsolidationService.test e o
+// TestRunnerPanel) disparava uma segunda execucao dos 46 testes em paralelo e,
+// com failed > 0, levava um process.exit(1) no meio da propria execucao. Era por
+// isso que securityTestRunner e persistenceTestRunner nunca terminavam.
+//
+// A comparacao e feita sem `node:url` de proposito: este modulo tambem entra no
+// bundle do browser pelo TestRunnerPanel, e importar builtin de Node ali quebra
+// o build do Vite.
+const ph40Argv1 = typeof process !== 'undefined' && Array.isArray(process.argv) ? process.argv[1] : undefined;
+const ph40IsDirectRun = !!ph40Argv1 && import.meta.url.endsWith(ph40Argv1.replace(/\\/g, '/'));
+
+if (ph40IsDirectRun) {
   FinanceTestRunner.runAllTests().then((res) => {
-    console.log(`  [PASS] FinanceTestRunner: ${res.passed}/${res.total} PASS`);
+    const label = res.failed > 0 ? 'FAIL' : 'PASS';
+    console.log(`  [${label}] FinanceTestRunner: ${res.passed}/${res.total} PASS`);
     if (res.failed > 0) process.exit(1);
   });
 }
