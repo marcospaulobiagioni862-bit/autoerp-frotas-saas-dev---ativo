@@ -85,15 +85,33 @@ export function verifyContractShareToken(token: string): { companyId: string; co
 
 const PUBLIC_CONTRACT_ROUTES_REGISTERED = Symbol.for('AUTOERP_PUBLIC_CONTRACT_ROUTES_REGISTERED');
 
-// Rate limiter específico para download público de PDF de contrato (Regra 3.2-a e Bloqueador 5 do PH-069).
-// Evita que a rota aberta antes do middleware vire vetor de DoS contra o banco e o storage de arquivos.
-export const publicContractPdfRateLimiter = rateLimit({
+// Proteção contra DoS na rota pública de PDF em duas camadas, espelhando login e bootstrap (server.ts:149-198).
+// No Render, confiar em req.ip falha porque múltiplos saltos internos mudam a cada requisição (contador não avança).
+// Camada 1: Chave determinística por recurso (ID do contrato). Limita abusos direcionados a um mesmo contrato.
+export const publicContractPdfResourceRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 60,
+  limit: 30, // 30 requisições por contrato a cada 15 min
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const contractId = typeof req.params?.id === 'string' ? req.params.id.trim() : 'unknown';
+    return `contract-pdf:${contractId}`;
+  },
+  message: { error: 'Muitas requisições para visualização deste contrato. Tente novamente em alguns minutos.' },
+});
+
+// Camada 2: Chave global para a rota pública. Limita o estrago total mesmo que o atacante varie IDs de contratos.
+export const publicContractPdfGlobalRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: false,
+  legacyHeaders: false,
+  keyGenerator: () => 'contract-pdf:global',
   message: { error: 'Muitas requisições para visualização de contratos. Tente novamente em alguns minutos.' },
 });
+
+// Alias para compatibilidade
+export const publicContractPdfRateLimiter = publicContractPdfResourceRateLimiter;
 
 export function registerPublicContractRoutes(app: Express): void {
   if ((app as any)[PUBLIC_CONTRACT_ROUTES_REGISTERED]) {
@@ -104,7 +122,11 @@ export function registerPublicContractRoutes(app: Express): void {
   // PH-069: Public contract PDF access via HMAC share token.
   // Registered BEFORE the authenticated /api middleware so drivers without active session
   // can view the contract from WhatsApp (wa.me) links. The share token is the sole authority.
-  app.get('/api/public/contracts/:id/pdf', publicContractPdfRateLimiter, async (req: Request, res: Response) => {
+  app.get(
+    '/api/public/contracts/:id/pdf',
+    publicContractPdfGlobalRateLimiter,
+    publicContractPdfResourceRateLimiter,
+    async (req: Request, res: Response) => {
     const rawId = req.params.id;
     const contractId = typeof rawId === 'string' ? rawId.trim() : '';
     if (!contractId) {

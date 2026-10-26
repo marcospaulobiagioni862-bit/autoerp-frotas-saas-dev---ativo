@@ -148,7 +148,7 @@ export async function runPublicContractPdfRouteRegression(): Promise<void> {
 
   try {
     // 2. Criar contrato e gerar PDF através das rotas autenticadas
-    console.log('  [1/6] Criando contrato e gerando PDF autenticado...');
+    console.log('  [1/7] Criando contrato e gerando PDF autenticado...');
     const createRes = await fetch(`${base}/api/contracts`, {
       method: 'POST',
       headers: {
@@ -198,7 +198,7 @@ export async function runPublicContractPdfRouteRegression(): Promise<void> {
     assert(validToken, 'share-link deve devolver token HMAC válido');
 
     // 3. Auditoria Caso A: SEM sessão e COM token válido -> 200 OK (Content-Type: application/pdf)
-    console.log('  [2/6] Testando acesso público SEM sessão e COM token válido...');
+    console.log('  [2/7] Testando acesso público SEM sessão e COM token válido...');
     const publicPdfRes = await fetch(`${base}/api/public/contracts/${contractId}/pdf?token=${encodeURIComponent(validToken)}`);
     assert.equal(publicPdfRes.status, 200, `Acesso público com token válido esperava 200, obteve ${publicPdfRes.status}`);
     assert.equal(publicPdfRes.headers.get('content-type'), 'application/pdf', 'Content-Type deve ser application/pdf');
@@ -215,7 +215,7 @@ export async function runPublicContractPdfRouteRegression(): Promise<void> {
     console.log('    ✓ Caso A aprovado: motorista visualiza PDF sem autenticação de sessão.');
 
     // 4. Auditoria Caso B: SEM sessão e SEM token -> 401 Unauthorized (NUNCA 200)
-    console.log('  [3/6] Testando acesso público SEM sessão e SEM token...');
+    console.log('  [3/7] Testando acesso público SEM sessão e SEM token...');
     const noTokenRes = await fetch(`${base}/api/public/contracts/${contractId}/pdf`);
     assert.equal(noTokenRes.status, 401, `Acesso sem token esperava 401, obteve ${noTokenRes.status}`);
     const noTokenJson = (await noTokenRes.json()) as any;
@@ -223,7 +223,7 @@ export async function runPublicContractPdfRouteRegression(): Promise<void> {
     console.log('    ✓ Caso B aprovado: requisição sem token é rejeitada com 401.');
 
     // 5. Auditoria Caso C (IDOR Protection): SEM sessão e COM token de OUTRO contrato -> 401 Unauthorized
-    console.log('  [4/6] Testando acesso público SEM sessão com token de OUTRO contrato (anti-IDOR)...');
+    console.log('  [4/7] Testando acesso público SEM sessão com token de OUTRO contrato (anti-IDOR)...');
     const otherContractId = 'cnt-other-contract-999';
     const otherContractToken = createContractShareToken(companyId, otherContractId);
     const wrongContractRes = await fetch(`${base}/api/public/contracts/${contractId}/pdf?token=${encodeURIComponent(otherContractToken)}`);
@@ -233,7 +233,7 @@ export async function runPublicContractPdfRouteRegression(): Promise<void> {
     console.log('    ✓ Caso C aprovado: token emitido para outro contrato é estritamente rejeitado.');
 
     // 6. Auditoria Caso D (Expiration): SEM sessão e COM token EXPIRADO -> 401 Unauthorized
-    console.log('  [5/6] Testando acesso público SEM sessão com token EXPIRADO...');
+    console.log('  [5/7] Testando acesso público SEM sessão com token EXPIRADO...');
     const expiredToken = createContractShareToken(companyId, contractId, 0, -3600); // Expirado há 1 hora
     const expiredRes = await fetch(`${base}/api/public/contracts/${contractId}/pdf?token=${encodeURIComponent(expiredToken)}`);
     assert.equal(expiredRes.status, 401, `Token expirado esperava 401, obteve ${expiredRes.status}`);
@@ -254,8 +254,28 @@ export async function runPublicContractPdfRouteRegression(): Promise<void> {
     const privateDetailRes = await fetch(`${base}/api/contracts/${contractId}`);
     assert.equal(privateDetailRes.status, 401, `Rota privada /api/contracts/:id sem sessão esperava 401, obteve ${privateDetailRes.status}`);
 
-    // 9. Bloqueador 4: INVARIANTE DE SUPERFÍCIE REAL SOBRE O ARQUIVO server.ts
-    console.log('  [6/6] Verificando invariante de superfície real no código de server.ts...');
+    // 9. Bloqueador 5: RATE LIMITER DETERMINÍSTICO (não confia em req.ip no Render, server.ts:149-157)
+    console.log('  [6/7] Testando que o rate limiter decrementa ratelimit-remaining deterministamente por contrato...');
+    const rlRes1 = await fetch(`${base}/api/public/contracts/${contractId}/pdf`);
+    const rem1Str = rlRes1.headers.get('ratelimit-remaining');
+    assert(rem1Str !== null, 'Header ratelimit-remaining deve estar presente');
+    const rem1 = Number(rem1Str);
+
+    const rlRes2 = await fetch(`${base}/api/public/contracts/${contractId}/pdf`);
+    const rem2Str = rlRes2.headers.get('ratelimit-remaining');
+    assert(rem2Str !== null, 'Header ratelimit-remaining deve estar presente na requisição consecutiva');
+    const rem2 = Number(rem2Str);
+
+    assert.equal(
+      rem2,
+      rem1 - 1,
+      `O contador ratelimit-remaining DEVE decrementar a cada requisição (esperado ${rem1 - 1}, obtido ${rem2}). ` +
+      'Se o contador não avança, o limiter está caindo em baldes fantasmas de proxy!'
+    );
+    console.log(`    ✓ Rate limiter comprovado: contador decrementou de ${rem1} para ${rem2} com chave por contrato.`);
+
+    // 10. Bloqueador 4: INVARIANTE DE SUPERFÍCIE REAL SOBRE O ARQUIVO server.ts
+    console.log('  [7/7] Verificando invariante de superfície real no código de server.ts...');
     const serverFilePath = join(process.cwd(), 'server.ts');
     const serverCode = readFileSync(serverFilePath, 'utf8');
 
