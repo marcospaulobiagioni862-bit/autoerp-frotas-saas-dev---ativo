@@ -6,7 +6,7 @@ import type { Driver, DriverHealthAndEmergency } from '../types/entities';
 import { AuditAction, DocumentStatus, DriverStatus } from '../types/enums';
 import { hasDriverHealthPermission } from '../shared/security/driverHealthAuthorization';
 import { evaluateCnhStatus } from './driverCnhStatus';
-import { registerDriverFormTokenRoutes } from './driverFormTokenRoutes';
+import { registerDriverFormTokenRoutes, LGPD_HEALTH_CONSENT_VERSION } from './driverFormTokenRoutes';
 
 type DriverAction = 'VIEW_DRIVER' | 'CREATE_DRIVER' | 'EDIT_DRIVER' | 'CHANGE_DRIVER_STATUS' | 'ARCHIVE_DRIVER';
 
@@ -182,6 +182,18 @@ function addressFrom(value: unknown, fallback?: Driver['address']): Driver['addr
   };
 }
 
+const ALLOWED_HEALTH_KEYS = [
+  'bloodType',
+  'allergies',
+  'relevantConditions',
+  'continuousMedications',
+  'controlledMedications',
+  'emergencyContactName',
+  'emergencyContactRelationship',
+  'emergencyContactPhone',
+  'emergencyNotes',
+] as const;
+
 function healthFrom(value: unknown, requireEmergency: boolean): DriverHealthAndEmergency | undefined {
   if (value === undefined || value === null) {
     if (requireEmergency) throw new DriverValidationError('Missing emergency contact');
@@ -189,9 +201,8 @@ function healthFrom(value: unknown, requireEmergency: boolean): DriverHealthAndE
   }
   if (typeof value !== 'object' || Array.isArray(value)) throw new DriverValidationError('Invalid health profile');
   const input = value as Record<string, unknown>;
-  const allowed = ['bloodType','allergies','relevantConditions','continuousMedications','emergencyContactName','emergencyContactRelationship','emergencyContactPhone','emergencyNotes'] as const;
   const health: DriverHealthAndEmergency = {};
-  for (const key of allowed) {
+  for (const key of ALLOWED_HEALTH_KEYS) {
     const raw = input[key];
     if (raw === undefined || raw === null || raw === '') continue;
     if (typeof raw !== 'string') throw new DriverValidationError('Invalid health profile');
@@ -215,10 +226,13 @@ async function saveHealthProfile(
   principal: AuthenticatedPrincipal,
   driverId: string,
   health: DriverHealthAndEmergency | undefined,
-  now: string
+  now: string,
+  hasConsent?: boolean
 ): Promise<void> {
   if (!health) return;
   const existing = await tx.getDriverHealthRepo().findByDriverId(driverId);
+  const lgpdConsentAt = hasConsent ? now : existing?.lgpdConsentAt;
+  const lgpdConsentVersion = hasConsent ? LGPD_HEALTH_CONSENT_VERSION : existing?.lgpdConsentVersion;
   await tx.getDriverHealthRepo().upsert({
     id: existing?.id || randomUUID(),
     companyId: principal.companyId,
@@ -227,6 +241,8 @@ async function saveHealthProfile(
     ...health,
     lastUpdateDate: now,
     responsibleUser: principal.name,
+    lgpdConsentAt,
+    lgpdConsentVersion,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   });
@@ -275,6 +291,10 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 function sendDriverError(res: Response, error: unknown): void {
+  if (error && typeof error === 'object' && (error as any).code === 'LGPD_CONSENT_REQUIRED') {
+    res.status(400).json({ code: 'LGPD_CONSENT_REQUIRED', error: (error as Error).message });
+    return;
+  }
   if (error instanceof DriverValidationError) {
     res.status(400).json({ error: 'Invalid driver request' });
     return;
@@ -352,6 +372,19 @@ export function registerDriverRoutes(app: Express): void {
         res.status(403).json({ error: 'Forbidden: health permission required for complete driver intake' });
         return;
       }
+      const rawHealth = (req.body?.health || {}) as Record<string, unknown>;
+      const hasHealthFields = ALLOWED_HEALTH_KEYS.some((k) => {
+        const val = rawHealth[k];
+        return typeof val === 'string' && val.trim().length > 0;
+      });
+      const hasConsent = req.body?.lgpdConsent === true || rawHealth?.lgpdConsent === true;
+      if (hasHealthFields && !hasConsent) {
+        res.status(400).json({
+          code: 'LGPD_CONSENT_REQUIRED',
+          error: 'É obrigatório aceitar o termo de consentimento da LGPD para registrar dados médicos e de emergência.',
+        });
+        return;
+      }
       const health = healthFrom(req.body?.health, true);
       const now = new Date().toISOString();
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
@@ -388,7 +421,7 @@ export function registerDriverRoutes(app: Express): void {
         };
         requireCompletedProfile(candidate);
         const created = await repo.create(candidate);
-        await saveHealthProfile(tx, principal, created.id, health, now);
+        await saveHealthProfile(tx, principal, created.id, health, now, hasConsent);
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Driver', entityId: created.id,
           action: AuditAction.CREATE, newState: auditState(created), userId: principal.userId,
@@ -424,6 +457,23 @@ export function registerDriverRoutes(app: Express): void {
         const completingPendingDocs = existing.status === DriverStatus.PENDING_DOCS;
         if (body.health !== undefined && !healthPermission(principal, 'EDIT_DRIVER_HEALTH')) {
           throw new DriverValidationError('Health permission required');
+        }
+        let hasConsent: boolean | undefined = undefined;
+        if (body.health !== undefined) {
+          const rawHealth = (body.health || {}) as Record<string, unknown>;
+          const hasHealthFields = ALLOWED_HEALTH_KEYS.some((k) => {
+            const val = rawHealth[k];
+            return typeof val === 'string' && val.trim().length > 0;
+          });
+          const existingHealth = await tx.getDriverHealthRepo().findByDriverId(existing.id);
+          const isConsenting = body.lgpdConsent === true || rawHealth?.lgpdConsent === true;
+          const hasExistingConsent = Boolean(existingHealth?.lgpdConsentAt);
+          if (hasHealthFields && !hasExistingConsent && !isConsenting) {
+            const err = new Error('É obrigatório aceitar o termo de consentimento da LGPD para registrar dados médicos e de emergência.');
+            (err as any).code = 'LGPD_CONSENT_REQUIRED';
+            throw err;
+          }
+          hasConsent = isConsenting;
         }
         const health = healthFrom(body.health, completingPendingDocs);
         const updatedCnhExpiration = body.cnhExpiration === undefined ? existing.cnhExpiration : normalizeIsoDate(body.cnhExpiration, 'cnhExpiration', true);
@@ -462,7 +512,7 @@ export function registerDriverRoutes(app: Express): void {
         if (cnhDuplicate && cnhDuplicate.id !== existing.id) throw new DriverConflictError();
         const saved = await repo.updateForCompany(principal.companyId, existing.id, updated);
         if (!saved) throw new DriverNotFoundError();
-        await saveHealthProfile(tx, principal, saved.id, health, updated.updatedAt);
+        await saveHealthProfile(tx, principal, saved.id, health, updated.updatedAt, hasConsent);
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Driver', entityId: existing.id,
           action: AuditAction.UPDATE, previousState: auditState(existing), newState: auditState(saved),
@@ -612,18 +662,41 @@ export function registerDriverRoutes(app: Express): void {
         health[key] = value;
       }
     }
+    const hasHealthFields = ALLOWED_HEALTH_KEYS.some((k) => {
+      const val = (raw as Record<string, unknown>)[k];
+      return typeof val === 'string' && val.trim().length > 0;
+    });
+    const isConsentingNow = req.body?.lgpdConsent === true || (raw as Record<string, unknown>).lgpdConsent === true;
+
     try {
       const saved = await UnitOfWork.run(principal.companyId, async (tx) => {
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
         if (!driver || driver.isArchived) throw new DriverNotFoundError();
         const existing = await tx.getDriverHealthRepo().findByDriverId(driverId);
+        const hasExistingConsent = Boolean(existing?.lgpdConsentAt);
+
+        if (hasHealthFields && !hasExistingConsent && !isConsentingNow) {
+          const err = new Error('É obrigatório aceitar o termo de consentimento da LGPD para registrar dados médicos e de emergência.');
+          (err as any).code = 'LGPD_CONSENT_REQUIRED';
+          throw err;
+        }
+
         const now = new Date().toISOString();
+        const consentAt = isConsentingNow
+          ? (typeof (raw as Record<string, unknown>).lgpdConsentAt === 'string' && (raw as Record<string, unknown>).lgpdConsentAt ? (raw as Record<string, unknown>).lgpdConsentAt as string : now)
+          : existing?.lgpdConsentAt;
+        const consentVersion = isConsentingNow
+          ? (typeof (raw as Record<string, unknown>).lgpdConsentVersion === 'string' && (raw as Record<string, unknown>).lgpdConsentVersion ? (raw as Record<string, unknown>).lgpdConsentVersion as string : LGPD_HEALTH_CONSENT_VERSION)
+          : existing?.lgpdConsentVersion;
+
         const profile = await tx.getDriverHealthRepo().upsert({
           id: existing?.id || randomUUID(),
           companyId: principal.companyId,
           driverId,
           ...(existing || {}),
           ...health,
+          lgpdConsentAt: consentAt,
+          lgpdConsentVersion: consentVersion,
           lastUpdateDate: now,
           responsibleUser: principal.name,
           createdAt: existing?.createdAt || now,
@@ -638,9 +711,14 @@ export function registerDriverRoutes(app: Express): void {
       });
       const { id: _id, companyId: _companyId, driverId: _driverId, createdAt: _createdAt, updatedAt: _updatedAt, ...safe } = saved;
       res.json({ health: safe });
-    } catch (error) {
-      if (error instanceof DriverNotFoundError) res.status(404).json({ error: 'Not found' });
-      else res.status(400).json({ error: 'Driver health request failed' });
+    } catch (error: any) {
+      if (error?.code === 'LGPD_CONSENT_REQUIRED') {
+        res.status(400).json({ code: 'LGPD_CONSENT_REQUIRED', error: error.message });
+      } else if (error instanceof DriverNotFoundError) {
+        res.status(404).json({ error: 'Not found' });
+      } else {
+        res.status(400).json({ error: 'Driver health request failed' });
+      }
     }
   });
 
