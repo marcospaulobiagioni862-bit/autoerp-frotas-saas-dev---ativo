@@ -22,11 +22,14 @@ type IdentifierField='plate'|'renavam'|'chassis';
 type IdentifierErrors=Partial<Record<IdentifierField,string>>;
 type MoneyField='acquisitionValue'|'currentValue'|'rentalValueBase';
 
+const MAX_AI_POLLING_MS = 60_000;
+
 function normalizedIdentifier(value:unknown):string{
  return typeof value==='string'||typeof value==='number'?String(value).toUpperCase().replace(/[^A-Z0-9]/g,''):'';
 }
 
-function analysisProgress(status:DocumentAiExtraction['status']|null):number{
+function analysisProgress(status:DocumentAiExtraction['status']|null, timedOut = false):number{
+ if(timedOut)return 100;
  if(status==='PENDING')return 50;
  if(status==='PROCESSING')return 70;
  if(status==='REVIEW_REQUIRED'||status==='COMPLETED'||status==='APPROVED'||status==='REJECTED'||status==='FAILED')return 100;
@@ -50,11 +53,13 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
  const[checkingIdentity,setCheckingIdentity]=useState(false);
  const[error,setError]=useState<string|null>(null);
  const[message,setMessage]=useState<string|null>(null);
+ const[timedOut,setTimedOut]=useState(false);
+ const waitStartRef=useRef<number|null>(null);
  const materializingRef=useRef(false);
 
- const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setBusy(false);setCompletionErrors({});setIdentifierErrors({});setIdentityCheck(null);setCheckingIdentity(false);materializingRef.current=false;setError(null);setMessage(null);};
+ const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setBusy(false);setCompletionErrors({});setIdentifierErrors({});setIdentityCheck(null);setCheckingIdentity(false);setTimedOut(false);waitStartRef.current=null;materializingRef.current=false;setError(null);setMessage(null);};
  useEffect(()=>{if(!isOpen)reset();},[isOpen]);
- useEffect(()=>{if(!isOpen||!attachmentId)return;const status=extraction?.status;if(status&&!['PENDING','PROCESSING'].includes(status))return;const timer=window.setInterval(()=>{if(!busy)void refresh();},4000);return()=>window.clearInterval(timer);},[isOpen,attachmentId,extraction?.status,busy]);
+ useEffect(()=>{if(!isOpen||!attachmentId||timedOut)return;const status=extraction?.status;if(status&&!['PENDING','PROCESSING'].includes(status))return;const timer=window.setInterval(()=>{if(!busy)void refresh();},4000);return()=>window.clearInterval(timer);},[isOpen,attachmentId,extraction?.status,busy,timedOut]);
 
  useEffect(()=>{
  if(!isOpen||!extraction||!['REVIEW_REQUIRED','COMPLETED','APPROVED'].includes(extraction.status)){
@@ -109,12 +114,23 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
  const current=all.filter(x=>x.attachmentId===attachmentId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0]||null;
  setExtraction(current);
  if(current&&(current.status==='REVIEW_REQUIRED'||current.status==='COMPLETED'||current.status==='APPROVED')){
+ waitStartRef.current=null;
+ setTimedOut(false);
  const initial:Record<string,string>={};
  for(const key of FIELD_KEYS){
  const value=current.corrections?.[key] ?? current.proposedFields[key];
  if(typeof value==='string'||typeof value==='number') initial[key]=String(value);
  }
  setCorrections(cur=>Object.keys(cur).length>0?cur:initial);
+ }else if(current?.status==='FAILED'){
+ waitStartRef.current=null;
+ setTimedOut(false);
+ }else if(!current||current.status==='PENDING'||current.status==='PROCESSING'){
+ if(waitStartRef.current===null){
+ waitStartRef.current=Date.now();
+ }else if(Date.now()-waitStartRef.current>MAX_AI_POLLING_MS){
+ setTimedOut(true);
+ }
  }
  return current;
  };
@@ -204,11 +220,13 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
  };
 
  const isReady=extraction&&(extraction.status==='APPROVED'||extraction.status==='COMPLETED'||extraction.status==='REVIEW_REQUIRED');
- const failed=extraction?.status==='FAILED';
- const progress=analysisProgress(extraction?.status||null);
- const analysisInProgress=!extraction||extraction.status==='PENDING'||extraction.status==='PROCESSING';
+ const failed=extraction?.status==='FAILED'||timedOut;
+ const progress=analysisProgress(extraction?.status||null,timedOut);
+ const analysisInProgress=!timedOut&&(!extraction||extraction.status==='PENDING'||extraction.status==='PROCESSING');
 
  const retryAnalysis=async()=>{
+ setTimedOut(false);
+ waitStartRef.current=Date.now();
  if(!extraction)return;
  setBusy(true);setError(null);setMessage(null);
  try{
@@ -220,12 +238,17 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
  };
 
  const failureMessage=(code:string|null):string=>{
+ if(timedOut)return 'Leitura por IA indisponível ou demorando mais que o esperado. Tente novamente ou realize o cadastro manual.';
  switch(code){
  case 'PROVIDER_TIMEOUT':return 'O provedor de IA não respondeu dentro do tempo esperado.';
  case 'PROVIDER_RATE_LIMIT':return 'O provedor de IA limitou temporariamente as solicitações.';
  case 'PROVIDER_BAD_REQUEST':return 'O provedor de IA recusou a solicitação do documento.';
  case 'PROVIDER_UNAVAILABLE':return 'O provedor de IA está indisponível no momento.';
- default:return 'A leitura automática do documento falhou.';
+ case 'RUNTIME_DISABLED':return 'Leitura por IA desativada ou indisponível neste ambiente. Realize o cadastro manual ou chame o suporte.';
+ case 'EXTRACTION_STALLED_PENDING':
+ case 'WORKER_UNAVAILABLE_TIMEOUT':
+ return 'Leitura por IA indisponível ou demorando mais que o esperado. Tente novamente ou realize o cadastro manual.';
+ default:return 'A leitura automática do documento falhou. Tente novamente ou realize o cadastro manual.';
  }
  };
 

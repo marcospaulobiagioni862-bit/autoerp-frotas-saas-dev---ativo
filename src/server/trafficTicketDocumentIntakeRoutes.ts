@@ -21,6 +21,7 @@ import {
   dispatchDocumentAiExtractionFromEnvironment,
   isDocumentAiRuntimeAvailableFromEnvironment,
 } from './documentAiRuntime';
+import { DocumentAiQueueService } from './documentAiQueue';
 
 const ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','FINANCIAL_MANAGER','OPERATIONAL','READONLY']);
 const WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','FINANCIAL_MANAGER','OPERATIONAL']);
@@ -178,7 +179,15 @@ async function suggestions(context:any,principal:AuthenticatedPrincipal,intakeId
   return {...base,contract:{id:String(match.id),number:String(match.contract_number||'')},driver:match.driver_id?{id:String(match.driver_id),name:String(match.driver_name||'')}:undefined,ambiguous:false};
 }
 function schedule(companyId:string,extractionId:string):void{
-  setImmediate(()=>{void dispatchDocumentAiExtractionFromEnvironment(companyId,extractionId,`traffic-ticket-intake-${extractionId}`).catch(()=>console.error('AUTOERP_TRAFFIC_TICKET_DOCUMENT_AI_DISPATCH_FAILURE'));});
+  setImmediate(()=>{
+    void dispatchDocumentAiExtractionFromEnvironment(companyId,extractionId,`traffic-ticket-intake-${extractionId}`)
+      .catch(async (error)=>{
+        console.error('AUTOERP_TRAFFIC_TICKET_DOCUMENT_AI_DISPATCH_FAILURE', error);
+        try {
+          await DocumentAiQueueService.failPendingExtraction(companyId, extractionId, 'PROVIDER_UNAVAILABLE');
+        } catch {}
+      });
+  });
 }
 function uniqueConstraint(error:unknown):string|undefined{
   let current:any=error;for(let depth=0;depth<6&&current;depth++,current=current.cause){

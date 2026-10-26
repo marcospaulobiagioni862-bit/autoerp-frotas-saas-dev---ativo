@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {AlertCircle,CheckCircle2,FileUp,RefreshCw,Sparkles} from 'lucide-react';
 import {DocumentAiClient,type DocumentAiExtraction} from '../../api/documentAiClient';
 import {DriverClient} from '../../api/driverClient';
@@ -22,7 +22,8 @@ const FIELD_KEYS=Object.keys(FIELD_LABELS);
 const ALLOWED_TYPES=new Set(['application/pdf','image/jpeg','image/jpg','image/png','image/webp']);
 const MAX_BYTES=15*1024*1024;
 
-function analysisProgress(status:DocumentAiExtraction['status']|null):number{
+function analysisProgress(status:DocumentAiExtraction['status']|null, timedOut = false):number{
+ if(timedOut)return 100;
  if(status==='PENDING')return 50;if(status==='PROCESSING')return 70;
  if(status==='REVIEW_REQUIRED'||status==='APPROVED'||status==='REJECTED'||status==='FAILED')return 100;return 45;
 }
@@ -88,8 +89,9 @@ function trafficTicketReviewError(input:Record<string,string>):string|undefined{
 }
 function failureMessage(code:string|null|undefined):string{
  if(code==='PROVIDER_RATE_LIMITED')return 'O provedor de IA atingiu o limite temporário. Aguarde e tente novamente mais tarde.';
- if(code==='PROVIDER_DISABLED')return 'O provedor de IA está desativado neste ambiente.';
- if(code==='PROVIDER_MISCONFIGURED')return 'A configuração do provedor de IA precisa ser corrigida no servidor.';
+ if(code==='PROVIDER_DISABLED'||code==='RUNTIME_DISABLED')return 'Leitura por IA indisponível neste ambiente. Preencha os dados da multa manualmente ou chame o suporte.';
+ if(code==='PROVIDER_MISCONFIGURED')return 'A configuração do provedor de IA precisa ser corrigida no servidor. Contate o suporte.';
+ if(code==='EXTRACTION_STALLED_PENDING'||code==='WORKER_UNAVAILABLE_TIMEOUT'||code==='PROVIDER_TIMEOUT')return 'Leitura por IA indisponível ou demorando mais que o esperado. Tente de novo ou chame o suporte.';
  return 'A IA não conseguiu concluir a leitura deste documento. Nenhuma multa, Conta a Pagar ou Conta a Receber foi criada.';
 }
 
@@ -113,13 +115,32 @@ export function TrafficTicketDocumentIntakeModal({isOpen,onClose,onCreated}:{isO
  const[responsibility,setResponsibility]=useState<TicketResponsibility>(TicketResponsibility.UNIDENTIFIED);
  const[baseCategory,setBaseCategory]=useState(''),[incomeCategory,setIncomeCategory]=useState(''),[nicCategory,setNicCategory]=useState(''),[nicAmount,setNicAmount]=useState(''),[notes,setNotes]=useState('');
  const[confirmUnregisteredVehicle,setConfirmUnregisteredVehicle]=useState(false);
+ const[timedOut,setTimedOut]=useState(false);
+ const waitStartRef=useRef<number|null>(null);
  const[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[message,setMessage]=useState<string|null>(null);
 
  const expenses=useMemo(()=>categories.filter(c=>c.type==='EXPENSE'||c.type==='BOTH'),[categories]);
  const income=useMemo(()=>categories.filter(c=>c.type==='INCOME'||c.type==='BOTH'),[categories]);
  const activeDrivers=useMemo(()=>drivers.filter(driver=>!driver.isArchived&&driver.status===DriverStatus.ACTIVE).sort((a,b)=>a.fullName.localeCompare(b.fullName,'pt-BR')),[drivers]);
- const reset=()=>{setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setDraft(null);setSuggestions(null);setCategories([]);setDrivers([]);setVehicleId('');setDriverId('');setContractId('');setResponsibility(TicketResponsibility.UNIDENTIFIED);setNicAmount('');setNotes('');setConfirmUnregisteredVehicle(false);setError(null);setMessage(null);setBusy(false);};
+ const reset=()=>{setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setDraft(null);setSuggestions(null);setCategories([]);setDrivers([]);setVehicleId('');setDriverId('');setContractId('');setResponsibility(TicketResponsibility.UNIDENTIFIED);setNicAmount('');setNotes('');setConfirmUnregisteredVehicle(false);setTimedOut(false);waitStartRef.current=null;setError(null);setMessage(null);setBusy(false);};
  useEffect(()=>{if(!isOpen)reset();},[isOpen]);
+ useEffect(()=>{
+  if(!isOpen||!attachmentId||timedOut)return;
+  const status=extraction?.status;
+  if(status&&!['PENDING','PROCESSING'].includes(status))return;
+  if(waitStartRef.current===null){
+   waitStartRef.current=Date.now();
+  }
+  const timer=window.setInterval(()=>{
+   if(waitStartRef.current&&Date.now()-waitStartRef.current>60_000){
+    setTimedOut(true);
+    setError('Leitura por IA indisponível ou demorando mais que o esperado. Tente de novo ou chame o suporte.');
+    return;
+   }
+   if(!busy)void refresh();
+  },4000);
+  return()=>window.clearInterval(timer);
+ },[isOpen,attachmentId,extraction?.status,busy,timedOut]);
 
  const start=async()=>{setBusy(true);setError(null);try{const intake=await TrafficTicketDocumentIntakeClient.create(`traffic-ticket-ui-${crypto.randomUUID()}`);setIntakeId(intake.id);setMessage('Pré-cadastro criado. Envie o auto ou notificação para leitura.');}catch(e){setError(e instanceof Error?e.message:'Falha ao iniciar leitura.');}finally{setBusy(false);}};
  const refresh=async()=>{if(!attachmentId)return null;const all=await DocumentAiClient.list();const current=all.filter(x=>x.attachmentId===attachmentId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0]||null;setExtraction(current);if(current?.status==='REVIEW_REQUIRED'){const initial:Record<string,string>={};for(const key of FIELD_KEYS){const raw=current.proposedFields[key];initial[key]=MONEY_FIELD_KEYS.has(key)?moneyDisplay(raw):DATE_FIELD_KEYS.has(key)?dateInputValue(raw):valueText(raw);}setCorrections(initial);setMessage('Leitura concluída. Confira os dados extraídos antes de aprovar.');}else if(current?.status==='FAILED'){setMessage(null);setError(failureMessage(current.failureCode));}return current;};
@@ -134,8 +155,8 @@ export function TrafficTicketDocumentIntakeModal({isOpen,onClose,onCreated}:{isO
  const createTicketCategory=async()=>{setBusy(true);setError(null);try{await FinanceMasterDataClient.createCategory({name:'Multas de trânsito',type:'BOTH'});const c=await TrafficTicketClient.categories();setCategories(c);const created=c.find(item=>item.name.toLocaleLowerCase('pt-BR')==='multas de trânsito'&&(item.type==='BOTH'||item.type==='EXPENSE'||item.type==='INCOME'));if(created){setBaseCategory(created.id);setIncomeCategory(created.id);setNicCategory(created.id);}setMessage('Categoria financeira “Multas de trânsito” criada. Revise os vínculos e confirme a multa.');}catch(e){setError(e instanceof Error?e.message:'Não foi possível criar a categoria financeira da multa.');}finally{setBusy(false);}};
  const materialize=async()=>{if(!intakeId||!draft)return;if(!vehicleId&&!confirmUnregisteredVehicle){setError('Confirme que deseja salvar a multa mesmo com o veículo fora do cadastro.');return;}if(!baseCategory){setError('Selecione a categoria de despesa da multa.');return;}if(responsibility===TicketResponsibility.DRIVER&&!driverId){setError('Selecione o motorista responsável pela multa.');return;}if(responsibility===TicketResponsibility.DRIVER&&!incomeCategory){setError('Selecione a categoria de receita para a cobrança do motorista.');return;}setBusy(true);setError(null);try{const result=await TrafficTicketDocumentIntakeClient.materialize(intakeId,{vehicleId:vehicleId||undefined,confirmUnregisteredVehicle:vehicleId?undefined:confirmUnregisteredVehicle,driverId:responsibility===TicketResponsibility.DRIVER?driverId||undefined:undefined,contractId:responsibility===TicketResponsibility.DRIVER?(contractId||undefined):undefined,responsibility,baseExpenseCategoryId:baseCategory,driverIncomeCategoryId:responsibility===TicketResponsibility.DRIVER?incomeCategory:undefined,nicExpenseCategoryId:responsibility===TicketResponsibility.UNIDENTIFIED?(nicCategory||baseCategory):undefined,nicAmount:moneyNumber(nicAmount),notes:notes.trim()||undefined});onCreated(result.ticketId);reset();onClose();}catch(e){setError(e instanceof Error?e.message:'Falha ao confirmar multa.');}finally{setBusy(false);}};
 
- const canEdit=extraction?.status==='REVIEW_REQUIRED',approved=extraction?.status==='APPROVED',failed=extraction?.status==='FAILED';
- const progress=analysisProgress(extraction?.status||null),analysisInProgress=!extraction||extraction.status==='PENDING'||extraction.status==='PROCESSING';
+ const canEdit=extraction?.status==='REVIEW_REQUIRED',approved=extraction?.status==='APPROVED',failed=extraction?.status==='FAILED'||timedOut;
+ const progress=analysisProgress(extraction?.status||null,timedOut),analysisInProgress=!timedOut&&(!extraction||extraction.status==='PENDING'||extraction.status==='PROCESSING');
  const missingRequiredCategory=expenses.length===0||(responsibility===TicketResponsibility.DRIVER&&income.length===0);
 
  return <ModalContainer isOpen={isOpen} onClose={onClose} size="5xl" title="Cadastrar multa por documento com IA"><div className="space-y-4">
@@ -143,9 +164,9 @@ export function TrafficTicketDocumentIntakeModal({isOpen,onClose,onCreated}:{isO
  {!intakeId&&<Button onClick={()=>void start()} disabled={busy} className="gap-2"><Sparkles className="h-4 w-4"/>{busy?'Preparando...':'Começar leitura com IA'}</Button>}
  {intakeId&&!attachmentId&&<label className="block rounded-xl border border-dashed p-6 text-center cursor-pointer"><FileUp className="mx-auto mb-2 h-7 w-7 text-graphite-500"/><span className="text-sm font-medium">Selecionar auto/notificação</span><span className="block text-xs text-graphite-500">PDF, JPG, PNG ou WEBP · até 15 MB</span><input className="hidden" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);e.currentTarget.value='';}}/></label>}
  {attachmentId&&<div className="space-y-3">
- <div className="flex flex-wrap items-center justify-between gap-2"><div><strong className="text-sm">Análise do auto</strong><p className="text-xs text-graphite-500">Status: {extraction?.status||'PROCESSANDO'}</p></div><Button variant="outline" size="sm" onClick={()=>void refresh()} disabled={busy} className="gap-2"><RefreshCw className={`h-4 w-4 ${analysisInProgress?'animate-spin':''}`}/>Atualizar análise</Button></div>
+ <div className="flex flex-wrap items-center justify-between gap-2"><div><strong className="text-sm">Análise do auto</strong><p className="text-xs text-graphite-500">Status: {timedOut?'FALHA (TIMEOUT)':extraction?.status||'PROCESSANDO'}</p></div><Button variant="outline" size="sm" onClick={()=>void refresh()} disabled={busy} className="gap-2"><RefreshCw className={`h-4 w-4 ${analysisInProgress?'animate-spin':''}`}/>Atualizar análise</Button></div>
  <div className="space-y-1.5"><div className="flex justify-between text-xs"><span>{failed?'Falha na leitura':analysisInProgress?'Analisando documento':'Etapa concluída'}</span><span>{failed?'interrompida':`${progress}% estimado`}</span></div><div className="h-2.5 overflow-hidden rounded-full bg-graphite-200 dark:bg-graphite-700"><div className={`h-full rounded-full ${failed?'bg-action-destructive':'bg-action-primary'} transition-[width] ${analysisInProgress?'animate-pulse':''}`} style={{width:`${progress}%`}}/></div></div>
- {failed&&<div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text "><div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><div><strong>Falha no processamento da IA.</strong><p className="mt-1">{failureMessage(extraction.failureCode)}</p><p className="mt-1 text-[11px] opacity-80">O documento foi recebido pelo sistema. Para uma nova leitura, reinicie o fluxo e envie o arquivo novamente após a correção do provedor.</p></div></div><Button variant="outline" size="sm" className="mt-3" onClick={()=>{reset();void start();}} disabled={busy}>Iniciar nova leitura</Button></div>}
+ {failed&&<div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text "><div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><div><strong>Falha no processamento da IA.</strong><p className="mt-1">{failureMessage(extraction?.failureCode||(timedOut?'EXTRACTION_STALLED_PENDING':null))}</p><p className="mt-1 text-[11px] opacity-80">O documento foi recebido pelo sistema. Para uma nova leitura, reinicie o fluxo e envie o arquivo novamente após a correção do provedor.</p></div></div><Button variant="outline" size="sm" className="mt-3" onClick={()=>{reset();setTimedOut(false);waitStartRef.current=null;void start();}} disabled={busy}>Iniciar nova leitura</Button></div>}
  {canEdit&&<div className="space-y-3"><p className="text-xs text-graphite-500">Confira e corrija os dados extraídos antes de aprovar. Valores usam o padrão brasileiro e datas podem ser escolhidas no calendário.</p><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{FIELD_KEYS.map(key=>{
  if(MONEY_FIELD_KEYS.has(key))return <Input key={key} label={FIELD_LABELS[key]} inputMode="decimal" value={corrections[key]||''} onChange={e=>setCorrections(v=>({...v,[key]:moneyMask(e.target.value)}))} placeholder="0,00"/>;
  if(DATE_FIELD_KEYS.has(key))return <Input key={key} label={FIELD_LABELS[key]} type="date" value={corrections[key]||''} onChange={e=>setCorrections(v=>({...v,[key]:e.target.value}))}/>;

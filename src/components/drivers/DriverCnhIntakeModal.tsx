@@ -91,15 +91,18 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
  const [notes, setNotes] = useState('');
  const [busy, setBusy] = useState(false);
  const [error, setError] = useState<string | null>(null);
+ const [timedOut, setTimedOut] = useState(false);
+ const waitStartRef = useRef<number | null>(null);
  const [localPhase, setLocalPhase] = useState<LocalPhase>('IDLE');
  const fileInputRef = useRef<HTMLInputElement>(null);
 
  const step = useMemo(() => {
  if (localPhase === 'UPLOADING') return 'UPLOADING';
  if (localPhase === 'REQUESTING') return 'REQUESTING';
+ if (timedOut) return 'FAILED';
  if (!extractionId) return 'UPLOAD';
  return extraction?.status || 'PENDING';
- }, [localPhase, extractionId, extraction?.status]);
+ }, [localPhase, extractionId, extraction?.status, timedOut]);
 
  const renewalDifferences = useMemo(() => {
  if (!renewalDriver) return [];
@@ -185,6 +188,8 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
  setDraft({ name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', issueDate: '', expirationDate: '' });
  setEarReview('');
  setNotes('');
+ setTimedOut(false);
+ waitStartRef.current = null;
  setError(null);
  setBusy(false);
  setLocalPhase('IDLE');
@@ -273,12 +278,20 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
  }, [renewalDifferenceSignature]);
 
  useEffect(() => {
- if (!isOpen || !extractionId || (step !== 'PENDING' && step !== 'PROCESSING')) return undefined;
+ if (!isOpen || !extractionId || (step !== 'PENDING' && step !== 'PROCESSING') || timedOut) return undefined;
+ if (waitStartRef.current === null) {
+ waitStartRef.current = Date.now();
+ }
  const timer = window.setInterval(() => {
+ if (waitStartRef.current && Date.now() - waitStartRef.current > 60_000) {
+ setTimedOut(true);
+ setError('Leitura por IA indisponível ou demorando mais que o esperado. Tente de novo ou preencha os dados do motorista manualmente.');
+ return;
+ }
  void loadExtraction(extractionId).catch((err) => setError(safeError(err)));
  }, 4000);
  return () => window.clearInterval(timer);
- }, [isOpen, extractionId, step]);
+ }, [isOpen, extractionId, step, timedOut]);
 
  const start = async () => {
  if (!file || busy) return;
@@ -743,11 +756,23 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
  <XCircle className="mx-auto h-9 w-9 text-error-icon" />
  <div>
  <p className="font-semibold text-graphite-900 dark:text-graphite-100">
- {providerRateLimited ? 'Serviço de leitura temporariamente indisponível' : 'Esta tentativa não pode preencher o cadastro'}
+ {timedOut
+ ? 'Leitura por IA indisponível ou demorando mais que o esperado'
+ : providerRateLimited
+ ? 'Serviço de leitura temporariamente indisponível'
+ : extraction?.failureCode === 'RUNTIME_DISABLED' || extraction?.failureCode === 'EXTRACTION_STALLED_PENDING' || extraction?.failureCode === 'WORKER_UNAVAILABLE_TIMEOUT'
+ ? 'Leitura por IA indisponível no momento'
+ : 'Esta tentativa não pode preencher o cadastro'}
  </p>
  <p className="mt-1 text-xs text-graphite-500">
- {providerRateLimited
+ {timedOut
+ ? 'O tempo de resposta da IA excedeu o limite. Preencha os dados do motorista manualmente ou tente novamente.'
+ : providerRateLimited
  ? 'A CNH enviada foi preservada. O limite temporário do serviço de leitura foi atingido; não envie o documento novamente agora.'
+ : extraction?.failureCode === 'RUNTIME_DISABLED'
+ ? 'O serviço de leitura automática está temporariamente desativado ou indisponível. Preencha o cadastro manualmente ou contate o suporte.'
+ : extraction?.failureCode === 'EXTRACTION_STALLED_PENDING' || extraction?.failureCode === 'WORKER_UNAVAILABLE_TIMEOUT'
+ ? 'A fila de processamento demorou mais do que o esperado. Tente novamente ou realize o preenchimento manual.'
  : `${extraction?.failureCode ? `Falha: ${extraction.failureCode}. ` : ''}Inicie uma nova tentativa com um documento legível.`}
  </p>
  </div>

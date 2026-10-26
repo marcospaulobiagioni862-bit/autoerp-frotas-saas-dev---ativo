@@ -119,6 +119,7 @@
     "test:payable-installment-order-integration": "tsx src/server/__tests__/payableInstallmentOrderIntegration.ts",
     "test:telemetry-km-divergence": "tsx src/server/__tests__/telemetryKmDivergenceIntegration.ts",
     "test:document-ai-intake-sync-resilience": "tsx src/server/__tests__/documentAiIntakeSyncResilienceRegression.ts",
+    "test:document-ai-stalled-queue": "tsx src/server/__tests__/documentAiStalledQueueRegression.test.ts",
     "test:vehicle-owner-cep-autofill": "tsx src/components/fleet/__tests__/vehicleOwnerAndCepAutofillRegression.ts",
     "test:vehicle-tax-calendar": "tsx src/server/__tests__/vehicleTaxCalendarRegression.ts && tsx src/server/__tests__/vehicleTaxCalendarPresetAndPayablesRegression.ts",
     "test:traffic-ticket-indication-state": "tsx src/server/__tests__/trafficTicketDriverIndicationStateMachine.ts",

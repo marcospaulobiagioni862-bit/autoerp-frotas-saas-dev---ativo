@@ -4,6 +4,7 @@ import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import { syncDriverDocumentIntakeWorkerResult } from './driverDocumentIntakeAiWorkerSync';
 import { syncVehicleDocumentIntakeWorkerResult } from './vehicleDocumentIntakeAiWorkerSync';
+import { syncTrafficTicketDocumentIntakeWorkerResult } from './trafficTicketDocumentIntakeAiWorkerSync';
 import {
   DocumentAiProcessingError,
   processDocumentAiBytes,
@@ -14,6 +15,7 @@ import {
 
 export const DOCUMENT_AI_MAX_ATTEMPTS = 3;
 export const DOCUMENT_AI_STALE_PROCESSING_MS = 180_000;
+export const DOCUMENT_AI_STALE_PENDING_MS = 300_000;
 
 const SYSTEM_USER_ID = 'SYSTEM_DOC_AI';
 const SYSTEM_USER_NAME = 'AutoERP Document AI Worker';
@@ -54,7 +56,12 @@ async function syncDocumentIntakeWorkerResult(
 ): Promise<void> {
   try {
     const driverHandled = await syncDriverDocumentIntakeWorkerResult(context, input);
-    if (!driverHandled) await syncVehicleDocumentIntakeWorkerResult(context, input);
+    if (!driverHandled) {
+      const vehicleHandled = await syncVehicleDocumentIntakeWorkerResult(context, input);
+      if (!vehicleHandled) {
+        await syncTrafficTicketDocumentIntakeWorkerResult(context, input);
+      }
+    }
   } catch (error) {
     console.error(
       'AUTOERP_DOCUMENT_AI_INTAKE_SYNC_FAILURE',
@@ -108,8 +115,8 @@ export type DocumentAiQueueResult =
   | { id: string; status: 'FAILED'; failureCode: string }
   | null;
 
-async function recoverStaleProcessing(companyId: string): Promise<void> {
-  await UnitOfWork.run(companyId, async (context: any) => {
+async function recoverStaleProcessing(companyId: string): Promise<{ requeuedCount: number; failedCount: number }> {
+  return await UnitOfWork.run(companyId, async (context: any) => {
     const tx = context.getRawTransaction?.();
     if (!tx) throw new Error('Document AI persistence unavailable');
 
@@ -125,13 +132,13 @@ async function recoverStaleProcessing(companyId: string): Promise<void> {
           updated_at = ${now}
       WHERE company_id = ${companyId}
         AND status = 'PROCESSING'
-        AND processing_started_at IS NOT NULL
-        AND processing_started_at < ${staleBefore}
+        AND COALESCE(processing_started_at, updated_at, created_at) < ${staleBefore}
         AND attempt_count < ${DOCUMENT_AI_MAX_ATTEMPTS}
       RETURNING id
     `);
 
-    for (const item of rows(requeuedResult)) {
+    const requeuedItems = rows(requeuedResult);
+    for (const item of requeuedItems) {
       const extractionId = requiredString(item.id, 'extraction id');
       await context.getAuditLogRepo().create({
         id: randomUUID(),
@@ -164,15 +171,19 @@ async function recoverStaleProcessing(companyId: string): Promise<void> {
           updated_at = ${now}
       WHERE company_id = ${companyId}
         AND status = 'PROCESSING'
-        AND processing_started_at IS NOT NULL
-        AND processing_started_at < ${staleBefore}
+        AND COALESCE(processing_started_at, updated_at, created_at) < ${staleBefore}
         AND attempt_count >= ${DOCUMENT_AI_MAX_ATTEMPTS}
       RETURNING id, attachment_id
     `);
 
-    for (const item of rows(failedResult)) {
+    const failedItems = rows(failedResult);
+    for (const item of failedItems) {
       const extractionId = requiredString(item.id, 'extraction id');
       const attachmentId = requiredString(item.attachment_id, 'attachment id');
+      console.error(
+        'AUTOERP_DOCUMENT_AI_STALE_PROCESSING_DETECTED',
+        JSON.stringify({ companyId, extractionId, failureCode: 'PROVIDER_TIMEOUT' }),
+      );
       await syncDocumentIntakeWorkerResult(context, {
         companyId,
         extractionId,
@@ -199,6 +210,133 @@ async function recoverStaleProcessing(companyId: string): Promise<void> {
         timestamp: now,
       });
     }
+
+    return { requeuedCount: requeuedItems.length, failedCount: failedItems.length };
+  });
+}
+
+async function recoverStalePending(companyId: string): Promise<number> {
+  return await UnitOfWork.run(companyId, async (context: any) => {
+    const tx = context.getRawTransaction?.();
+    if (!tx) throw new Error('Document AI persistence unavailable');
+
+    const now = new Date().toISOString();
+    const staleBeforePending = new Date(Date.now() - DOCUMENT_AI_STALE_PENDING_MS).toISOString();
+
+    const failedResult = await tx.execute(sql`
+      UPDATE document_ai_extractions
+      SET status = 'FAILED',
+          worker_id = NULL,
+          processing_started_at = NULL,
+          failure_code = 'EXTRACTION_STALLED_PENDING',
+          raw_extraction = '{}'::jsonb,
+          proposed_fields = '{}'::jsonb,
+          field_confidence = '{}'::jsonb,
+          completed_at = ${now},
+          updated_at = ${now}
+      WHERE company_id = ${companyId}
+        AND status = 'PENDING'
+        AND created_at < ${staleBeforePending}
+      RETURNING id, attachment_id
+    `);
+
+    const failedItems = rows(failedResult);
+    for (const item of failedItems) {
+      const extractionId = requiredString(item.id, 'extraction id');
+      const attachmentId = requiredString(item.attachment_id, 'attachment id');
+      console.error(
+        'AUTOERP_DOCUMENT_AI_STALE_PENDING_DETECTED',
+        JSON.stringify({ companyId, extractionId, failureCode: 'EXTRACTION_STALLED_PENDING' }),
+      );
+      await syncDocumentIntakeWorkerResult(context, {
+        companyId,
+        extractionId,
+        attachmentId,
+        targetStatus: 'FAILED',
+        failureCode: 'EXTRACTION_STALLED_PENDING',
+        now,
+      });
+      await context.getAuditLogRepo().create({
+        id: randomUUID(),
+        companyId,
+        entityName: 'DocumentAiExtraction',
+        entityId: extractionId,
+        action: AuditAction.UPDATE,
+        previousState: JSON.stringify({ status: 'PENDING' }),
+        newState: JSON.stringify({
+          event: 'AI_EXTRACTION_STALE_PENDING_FAILED',
+          status: 'FAILED',
+          failureCode: 'EXTRACTION_STALLED_PENDING',
+          businessMutationApplied: false,
+        }),
+        userId: SYSTEM_USER_ID,
+        userName: SYSTEM_USER_NAME,
+        timestamp: now,
+      });
+    }
+
+    return failedItems.length;
+  });
+}
+
+export async function failPendingExtraction(
+  companyId: string,
+  extractionId: string,
+  failureCode: string,
+): Promise<boolean> {
+  return await UnitOfWork.run(companyId, async (context: any) => {
+    const tx = context.getRawTransaction?.();
+    if (!tx) throw new Error('Document AI persistence unavailable');
+
+    const now = new Date().toISOString();
+    const result = await tx.execute(sql`
+      UPDATE document_ai_extractions
+      SET status = 'FAILED',
+          worker_id = NULL,
+          processing_started_at = NULL,
+          failure_code = ${failureCode},
+          raw_extraction = '{}'::jsonb,
+          proposed_fields = '{}'::jsonb,
+          field_confidence = '{}'::jsonb,
+          completed_at = ${now},
+          updated_at = ${now}
+      WHERE company_id = ${companyId}
+        AND id = ${extractionId}
+        AND status IN ('PENDING', 'PROCESSING')
+      RETURNING id, attachment_id, status
+    `);
+
+    const items = rows(result);
+    if (items.length === 0) return false;
+
+    const item = items[0];
+    const attachmentId = requiredString(item.attachment_id, 'attachment id');
+    await syncDocumentIntakeWorkerResult(context, {
+      companyId,
+      extractionId,
+      attachmentId,
+      targetStatus: 'FAILED',
+      failureCode,
+      now,
+    });
+    await context.getAuditLogRepo().create({
+      id: randomUUID(),
+      companyId,
+      entityName: 'DocumentAiExtraction',
+      entityId: extractionId,
+      action: AuditAction.UPDATE,
+      previousState: JSON.stringify({ status: item.status }),
+      newState: JSON.stringify({
+        event: 'AI_EXTRACTION_FAIL_DIRECT',
+        status: 'FAILED',
+        failureCode,
+        businessMutationApplied: false,
+      }),
+      userId: SYSTEM_USER_ID,
+      userName: SYSTEM_USER_NAME,
+      timestamp: now,
+    });
+    return true;
   });
 }
 
@@ -374,6 +512,28 @@ async function fail(companyId: string, claimedBy: string, item: ClaimedExtractio
 }
 
 export class DocumentAiQueueService {
+  static async recoverStaleExtractions(companyId: string): Promise<{
+    requeuedProcessing: number;
+    failedProcessing: number;
+    failedPending: number;
+  }> {
+    const processing = await recoverStaleProcessing(companyId);
+    const failedPending = await recoverStalePending(companyId);
+    return {
+      requeuedProcessing: processing.requeuedCount,
+      failedProcessing: processing.failedCount,
+      failedPending,
+    };
+  }
+
+  static async failPendingExtraction(
+    companyId: string,
+    extractionId: string,
+    failureCode: string,
+  ): Promise<boolean> {
+    return await failPendingExtraction(companyId, extractionId, failureCode);
+  }
+
   static async processNextForTenant(
     companyId: string,
     worker: string,
@@ -382,7 +542,7 @@ export class DocumentAiQueueService {
     expectedExtractionId?: string,
   ): Promise<DocumentAiQueueResult> {
     const claimedBy = workerId(worker);
-    await recoverStaleProcessing(companyId);
+    await DocumentAiQueueService.recoverStaleExtractions(companyId);
     const item = await claim(companyId, claimedBy, expectedExtractionId);
     if (!item) return null;
     try {

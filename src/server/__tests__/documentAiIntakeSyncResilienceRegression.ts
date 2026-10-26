@@ -46,14 +46,14 @@ for (const campo of ['extractionId', 'attachmentId', 'targetStatus', 'reason']) 
   assert.match(syncHelper, new RegExp(campo), `o log de falha de sync deve conter ${campo}`);
 }
 
-// Os tres pontos de chamada continuam passando pelo helper protegido, e nenhum
-// chama os syncs especificos direto (o que furaria a protecao).
+// Todos os pontos de resultado (requeue/processing-failed, complete, fail, stale-pending, fail-direct)
+// continuam passando pelo helper protegido, e nenhum chama os syncs especificos direto (o que furaria a protecao).
 const chamadasHelper = queueSource.match(/syncDocumentIntakeWorkerResult\(context/g) ?? [];
-assert.equal(chamadasHelper.length, 3, 'os 3 pontos de resultado (requeue, complete, fail) devem usar o helper protegido');
+assert.equal(chamadasHelper.length, 5, 'os 5 pontos de resultado de extracao devem usar o helper protegido');
 const corpoForaDoHelper = queueSource.replace(syncHelper, '');
 assert.doesNotMatch(
   corpoForaDoHelper,
-  /await\s+syncDriverDocumentIntakeWorkerResult|await\s+syncVehicleDocumentIntakeWorkerResult/,
+  /await\s+syncDriverDocumentIntakeWorkerResult|await\s+syncVehicleDocumentIntakeWorkerResult|await\s+syncTrafficTicketDocumentIntakeWorkerResult/,
   'nenhum ponto pode chamar os syncs especificos direto, por fora da protecao',
 );
 

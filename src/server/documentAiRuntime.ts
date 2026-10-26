@@ -167,7 +167,18 @@ export async function dispatchDocumentAiExtractionFromEnvironment(
   try {
     runtime = createDocumentAiRuntimeFromEnvironment(environment, dependencies);
   } catch (error) {
-    if (error instanceof DocumentAiRuntimeUnavailableError) return { state: 'DISABLED' };
+    if (error instanceof DocumentAiRuntimeUnavailableError) {
+      console.error(
+        'AUTOERP_DOCUMENT_AI_RUNTIME_UNAVAILABLE_DISPATCH',
+        JSON.stringify({ companyId, extractionId, reason: 'RUNTIME_DISABLED' }),
+      );
+      try {
+        await DocumentAiQueueService.failPendingExtraction(companyId, extractionId, 'RUNTIME_DISABLED');
+      } catch {
+        // Fallback or hermetic tests where DB may not be seeded
+      }
+      return { state: 'DISABLED' };
+    }
     throw error;
   }
 
@@ -186,15 +197,6 @@ export function startDocumentAiRecurringWorkerFromEnvironment(
   if (recurringWorkerStarted) return true;
   if (!enabled(environment.DOC_AI_WORKER_ENABLED)) return false;
 
-  let runtime: DocumentAiRuntime;
-  try {
-    runtime = createDocumentAiRuntimeFromEnvironment(environment);
-  } catch (error) {
-    if (error instanceof DocumentAiRuntimeUnavailableError) return false;
-    console.error('AUTOERP_DOCUMENT_AI_WORKER_START_FAILURE');
-    return false;
-  }
-
   recurringWorkerStarted = true;
   const recurringWorkerId = `doc-ai-recurring-${process.pid}`;
 
@@ -212,12 +214,31 @@ export function startDocumentAiRecurringWorkerFromEnvironment(
     }
     recurringWorkerRunning = true;
     try {
+      let runtime: DocumentAiRuntime | null = null;
+      try {
+        runtime = createDocumentAiRuntimeFromEnvironment(environment);
+      } catch (error) {
+        if (enabled(environment.DOC_AI_WORKER_ENABLED)) {
+          console.error(
+            'AUTOERP_DOCUMENT_AI_RUNTIME_ALERT',
+            JSON.stringify({ event: 'RUNTIME_MISCONFIGURED', mode: 'MISCONFIGURED' }),
+          );
+        }
+      }
+
       const activeCompanies = await db
         .select({ id: companies.id })
         .from(companies)
         .where(eq(companies.status, 'ACTIVE'));
+
       for (const company of activeCompanies) {
-        await runtime.processNextForTenant(String(company.id), recurringWorkerId);
+        const companyId = String(company.id);
+        if (runtime) {
+          await runtime.processNextForTenant(companyId, recurringWorkerId);
+        } else {
+          // Worker is disabled or runtime unavailable: run autonomous reaper to prevent stalled jobs from staying PENDING or PROCESSING forever!
+          await DocumentAiQueueService.recoverStaleExtractions(companyId);
+        }
       }
     } catch {
       console.error('AUTOERP_DOCUMENT_AI_WORKER_FAILURE');

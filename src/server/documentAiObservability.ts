@@ -72,13 +72,21 @@ export function inspectDocumentAiRuntimeMode(
   environment: DocumentAiObservabilityEnvironment = process.env,
 ): DocumentAiRuntimeMode {
   if (String(environment.DOC_AI_WORKER_ENABLED || '').trim().toLowerCase() !== 'true') return 'DISABLED';
+  const allowReal = String((environment as any).DOC_AI_REAL_DOCUMENTS_ENABLED || '').trim().toLowerCase() === 'true';
+  const syntheticValid = validChecksumAllowlist(environment.DOC_AI_SYNTHETIC_SHA256_ALLOWLIST);
   if (
     String(environment.DOC_AI_PROVIDER || '').trim().toUpperCase() !== 'GEMINI' ||
     !present(environment.DOC_AI_GEMINI_MODEL) ||
     !present(environment.GEMINI_API_KEY) ||
-    !validChecksumAllowlist(environment.DOC_AI_SYNTHETIC_SHA256_ALLOWLIST) ||
+    (!allowReal && !syntheticValid) ||
     !storageConfigured(environment)
-  ) return 'MISCONFIGURED';
+  ) {
+    console.error(
+      'AUTOERP_DOCUMENT_AI_RUNTIME_ALERT',
+      JSON.stringify({ event: 'RUNTIME_MISCONFIGURED', mode: 'MISCONFIGURED' }),
+    );
+    return 'MISCONFIGURED';
+  }
   return 'READY_SYNTHETIC_ONLY';
 }
 

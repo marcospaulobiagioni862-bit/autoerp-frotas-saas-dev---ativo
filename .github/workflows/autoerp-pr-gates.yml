@@ -972,6 +972,7 @@ jobs:
           npx tsx src/server/__tests__/documentAiObservabilityTestRunner.ts
           npx tsx src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           npx tsx src/server/__tests__/documentAiQueueIntegration.ts
+          npx tsx src/server/__tests__/documentAiStalledQueueRegression.test.ts
       - name: Fleet domain regressions
         if: matrix.suite == 'fleet'
         run: |

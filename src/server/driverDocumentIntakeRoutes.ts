@@ -17,6 +17,7 @@ import {
   dispatchDocumentAiExtractionFromEnvironment,
   isDocumentAiRuntimeAvailableFromEnvironment,
 } from './documentAiRuntime';
+import { DocumentAiQueueService } from './documentAiQueue';
 import {
   DriverDocumentIntakePromotionConflictError,
   DriverDocumentIntakePromotionNotFoundError,
@@ -141,8 +142,11 @@ function scheduleDocumentAiExtraction(companyId: string, extractionId: string): 
       companyId,
       extractionId,
       `driver-intake-${extractionId}`,
-    ).catch(() => {
-      console.error('AUTOERP_DOCUMENT_AI_DISPATCH_FAILURE');
+    ).catch(async (error) => {
+      console.error('AUTOERP_DOCUMENT_AI_DISPATCH_FAILURE', error);
+      try {
+        await DocumentAiQueueService.failPendingExtraction(companyId, extractionId, 'PROVIDER_UNAVAILABLE');
+      } catch {}
     });
   });
 }
