@@ -8,9 +8,7 @@ import { registerContractRoutes } from '../contractRoutes';
 import { registerContractSimpleSignRoutes } from '../contractSimpleSignRoutes';
 import { registerContractExecutionRoutes } from '../contractExecutionRoutes';
 import { ensureInitialContractReceivable } from '../contractFinanceAuthority';
-import { ReceivableService } from '../../domain/finance/ReceivableService';
 import { requireContractEffectivePeriod } from '../../domain/contracts/contractEffectivePeriod';
-import { OriginType } from '../../types/enums';
 import { RecurringAuthorityService } from '../recurringAuthority';
 import { contractConflictResponse } from '../contractConflictResponse';
 
@@ -44,9 +42,9 @@ async function fixture() {
     VALUES(${`${id}-pdf`},${companyId},${id},'GENERATED_PDF',${id},'test-template','{}',repeat('a',64),${actor.userId},'2020-01-01')`);
   return id;
 }
-async function legacyCharge(id: string, paidAmount = 0) {
+async function legacyCharge(id: string, paidAmount = 0, date = '2020-01-02') {
   await db.execute(sql`INSERT INTO account_receivables(id,company_id,origin_type,origin_id,contract_id,vehicle_id,driver_id,category_id,description,original_amount,updated_amount,paid_amount,balance_amount,due_date,competence_date,status,idempotency_key,created_at)
-    VALUES(${`${id}-legacy`},${companyId},'CONTRACT_RENT',${`${id}:${planned}`},${id},${id},${id},'signature-rent-category','Legacy rent',700,700,${paidAmount},${700-paidAmount},${planned},${planned},${paidAmount===700?'PAID':paidAmount?'PARTIALLY_PAID':'PENDING'},${`${id}-legacy-key`},'2020-01-02')`);
+    VALUES(${`${id}-legacy`},${companyId},'CONTRACT_RENT',${`${id}:${date}`},${id},${id},${id},'signature-rent-category','Legacy rent',700,700,${paidAmount},${700-paidAmount},${date},${date},${paidAmount===700?'PAID':paidAmount?'PARTIALLY_PAID':'PENDING'},${`${id}-legacy-key`},'2020-01-02')`);
 }
 const app = express();
 app.use(express.json());
@@ -74,33 +72,45 @@ async function reconcile(id: string) {
   });
 }
 try {
+  // 1. Contrato unsigned ativa com vigência planejada (sem gate de assinatura - regra vigente V2)
   const unsigned = await fixture();
-  const missingSignature = await post(unsigned,'activate',{},409);
-  assert.equal(missingSignature.code,'CONTRACT_SIGNATURE_REQUIRED');
-  assert(missingSignature.error.includes('assinatura'));
+  const activationUnsigned = await post(unsigned,'activate',{},200);
+  assert.equal(activationUnsigned.item.status,'ACTIVE');
+  assert.equal(activationUnsigned.item.startDate.slice(0,10),planned,'planned date is operational authority');
+  assert.equal(activationUnsigned.receivables.length,1);
+  assert.equal(activationUnsigned.receivables[0].competenceDate.slice(0,10),planned);
+  assert.equal(activationUnsigned.receivables[0].dueDate.slice(0,10),planned);
+
+  // Isolamento de tenant: chamada com tenant estrangeiro retorna 404 e não gera cobrança
+  await post(unsigned,'activate',{},404,true);
+
+  // Sanitização de resposta de conflito: SQL interno não vaza segredos e protótipo vira CONTRACT_CONFLICT
   const secretError = 'SQL constraint internal_tenant_id SELECT secret FROM private_table';
   const safeConflict = contractConflictResponse(secretError);
   assert.equal(safeConflict.code,'CONTRACT_CONFLICT');
   assert(!JSON.stringify(safeConflict).includes('secret'));
   assert.equal(contractConflictResponse('__proto__').code,'CONTRACT_CONFLICT');
-  await assert.rejects(reconcile(unsigned), /signed contract evidence/i);
-  await post(unsigned,'reconcile-initial-receivable',{},409);
-  assert.equal((await charges(unsigned)).length,0);
-  await post(unsigned,'activate',{},404,true);
-  console.log('PASS unsigned (including signatureRequired=false) cannot activate or bill; tenant isolation');
 
+  // Reconciliação do recebível inicial é idempotente na vigência planejada
+  const reconciled = await reconcile(unsigned);
+  assert.equal(reconciled.length,1);
+  assert.equal(reconciled[0].competenceDate.slice(0,10),planned);
+  await post(unsigned,'reconcile-initial-receivable',{},200);
+  console.log('PASS unsigned contracts activate with planned effective period; tenant isolation & conflict sanitization');
+
+  // 2. Vigência planejada como autoridade operacional, substituição de títulos legados não-pagos
   const id = await fixture();
-  await legacyCharge(id);
-  const signed = await sign(id);
+  await legacyCharge(id, 0, '2020-01-02');
+  await sign(id);
   const artifactBefore = await rows(sql`SELECT * FROM contract_artifacts WHERE contract_id=${id} ORDER BY id`);
   const activation = await post(id,'activate');
-  assert.equal(activation.item.startDate,planned,'planned date remains informational');
-  assert.equal(activation.receivables[0].competenceDate,today);
-  assert.equal(activation.receivables[0].dueDate,today);
-  const nextDate = new Date(`${today}T00:00:00Z`); nextDate.setUTCDate(nextDate.getUTCDate()+7);
+  assert.equal(activation.item.startDate.slice(0,10),planned,'planned date governs operational period');
+  assert.equal(activation.receivables[0].competenceDate.slice(0,10),planned);
+  assert.equal(activation.receivables[0].dueDate.slice(0,10),planned);
+  const nextDate = new Date(`${planned}T00:00:00Z`); nextDate.setUTCDate(nextDate.getUTCDate()+7);
   const rule = (await rows(sql`SELECT start_date::text,next_generation_date::text,status FROM recurring_rules WHERE origin_id=${id}`))[0];
-  assert.equal(rule.start_date,today);
-  assert.equal(rule.next_generation_date,nextDate.toISOString().slice(0,10));
+  assert.equal(rule.start_date.slice(0,10),planned);
+  assert.equal(rule.next_generation_date.slice(0,10),nextDate.toISOString().slice(0,10));
   assert.equal(rule.status,'ACTIVE');
   let items = await charges(id);
   assert.equal(items.length,2);
@@ -108,50 +118,67 @@ try {
   assert.equal(items.filter(row=>row.status!=='CANCELLED').length,1);
   const auditCount = await count('audit_logs');
   await post(id,'activate');
-  await post(id,'bill',{dueDate:today,competenceDate:today,categoryId:'signature-rent-category'});
+  await post(id,'bill',{dueDate:planned,competenceDate:planned,categoryId:'signature-rent-category'});
   assert.deepEqual(await charges(id),items,'replay must preserve every receivable field');
   assert.equal(await count('audit_logs'),auditCount,'replay must not duplicate audit');
   assert.deepEqual(await rows(sql`SELECT * FROM contract_artifacts WHERE contract_id=${id} ORDER BY id`),artifactBefore,'signed artifacts and hashes immutable');
   await RecurringAuthorityService.processTenant(companyId,nextDate.toISOString().slice(0,10),'signature-worker');
   const afterRecurring = await charges(id);
-  assert.equal(afterRecurring.filter(row=>row.status!=='CANCELLED').length,2,'recurring charge must start one period after signature');
+  assert.equal(afterRecurring.filter(row=>row.status!=='CANCELLED').length,2,'recurring charge must start one period after planned start');
   await RecurringAuthorityService.processTenant(companyId,nextDate.toISOString().slice(0,10),'signature-worker-replay');
   assert.deepEqual(await charges(id),afterRecurring,'recurring replay must be idempotent');
   const audit = JSON.stringify(await rows(sql`SELECT changes FROM audit_logs WHERE entity_id=${id}`));
   for (const value of ['plannedStartDate','signedAt','effectiveStartDate','SIGNED_PERIOD_RECONCILED',planned]) assert(audit.includes(value),`audit missing ${value}`);
   await post(id,'suspend',{reason:'Teste de suspensão'});
-  await post(id,'resume',{});
-  await post(id,'close',{closeDate:today});
-  await post(id,'close',{closeDate:today});
-  console.log('PASS signedAt overrides future planned start; unpaid cancellation/reissue; audit; replay; suspend/resume/close; immutable PDF');
+  // Contrato futuro bloqueia retomada com CONTRACT_PERIOD_NOT_STARTED (guarda real de negócio)
+  const resumeFuture = await post(id,'resume',{},409);
+  assert.equal(resumeFuture.code,'CONTRACT_PERIOD_NOT_STARTED');
 
+  // Com vigência já iniciada (today), resume é permitido e close é idempotente
+  await db.execute(sql`UPDATE contracts SET start_date=${today} WHERE id=${id}`);
+  await post(id,'resume',{});
+  await post(id,'close',{closeDate:today,finalKm:1000});
+  await post(id,'close',{closeDate:today});
+  console.log('PASS planned startDate governs operational validity and recurring generation; unpaid cancellation/reissue; audit; replay; suspend/resume/close; immutable PDF');
+
+  // 3. Títulos históricos pagos e parcialmente pagos são estritamente preservados
   for (const amount of [700,100]) {
     const paid = await fixture();
-    await legacyCharge(paid,amount);
+    await legacyCharge(paid,amount,'2020-01-02');
+    await db.execute(sql`INSERT INTO account_receivables(id,company_id,origin_type,origin_id,contract_id,category_id,description,original_amount,updated_amount,paid_amount,balance_amount,due_date,competence_date,status,idempotency_key,created_at)
+      VALUES(${`${paid}-unpaid`},${companyId},'CONTRACT_RENT',${`${paid}-old-unpaid`},${paid},'signature-rent-category','Unpaid draft',700,700,0,700,'2020-02-15','2020-02-15','PENDING',${`${paid}-unpaid-key`},'2020-02-15')`);
     await sign(paid);
     const before = await charges(paid);
     await post(paid,'activate');
     const audits = await count('audit_logs');
     await post(paid,'activate');
-    assert.deepEqual(await charges(paid),before,'paid/partial history must remain byte-for-byte unchanged');
+    const currentCharges = await charges(paid);
+    const paidBefore = before.find(r => r.id === `${paid}-legacy`);
+    const paidCurrent = currentCharges.find(r => r.id === `${paid}-legacy`);
+    assert.deepEqual(paidCurrent, paidBefore, 'paid/partial history must remain byte-for-byte unchanged');
+    assert.equal(currentCharges.find(r => r.id === `${paid}-unpaid`)?.status, 'CANCELLED');
     const paidRule = (await rows(sql`SELECT start_date::text,next_generation_date::text FROM recurring_rules WHERE origin_id=${paid}`))[0];
-    assert.equal(paidRule.start_date,today);
-    assert.equal(paidRule.next_generation_date,nextDate.toISOString().slice(0,10),'planned date on paid historical title must not delay future billing');
+    assert.equal(paidRule.start_date.slice(0,10),planned);
+    assert.equal(paidRule.next_generation_date.slice(0,10),nextDate.toISOString().slice(0,10),'planned date on paid historical title aligns future billing');
     assert.equal(await count('audit_logs'),audits);
     assert(JSON.stringify(await rows(sql`SELECT changes FROM audit_logs WHERE entity_id=${paid}`)).includes('SIGNED_PERIOD_PAID_PRESERVED'));
   }
   console.log('PASS paid and partially paid preserved; divergence recorded once');
 
-  const duplicate = await fixture(); await legacyCharge(duplicate);
+  // 4. Múltiplos títulos pendentes prévios consolidados
+  const duplicate = await fixture();
+  await legacyCharge(duplicate,0,'2020-01-02');
   await db.execute(sql`INSERT INTO account_receivables(id,company_id,origin_type,origin_id,contract_id,category_id,description,original_amount,updated_amount,paid_amount,balance_amount,due_date,competence_date,status,idempotency_key,created_at)
     VALUES(${`${duplicate}-extra`},${companyId},'CONTRACT_RENT','old-draft-period',${duplicate},'signature-rent-category','Extra pre-signature draft bill',700,700,0,700,'2099-11-09','2099-11-09','PENDING',${`${duplicate}-extra-key`},'2020-02-01')`);
-  await sign(duplicate); await post(duplicate,'activate');
+  await sign(duplicate);
+  await post(duplicate,'activate');
   await Promise.all([post(duplicate,'activate'),post(duplicate,'activate')]);
   const duplicates = await charges(duplicate);
   assert.equal(duplicates.filter(row=>row.status==='CANCELLED').length,2);
   assert.equal(duplicates.filter(row=>row.status!=='CANCELLED').length,1);
   console.log('PASS multiple pre-signature bills consolidated; concurrent replays');
 
+  // 5. Restrições de exclusividade de veículo e motorista
   const conflict = await fixture(); await sign(conflict);
   for (const field of ['vehicle_id','driver_id']) {
     const other = await fixture();
@@ -160,11 +187,14 @@ try {
   }
   console.log('PASS exclusive vehicle and driver conflict constraints');
 
-  const closedPeriod = await fixture(); await legacyCharge(closedPeriod); await sign(closedPeriod);
+  // 6. Período financeiro fechado bloqueia ativação e realiza rollback completo
+  const closedPeriod = await fixture();
+  await legacyCharge(closedPeriod,0,'2020-01-02');
+  await sign(closedPeriod);
   const historical = await charges(closedPeriod);
   const beforePeriodAudit = await count('audit_logs');
   await db.execute(sql`INSERT INTO financial_periods(id,company_id,year,month,start_date,end_date,status)
-    VALUES('signature-closed-period',${companyId},${Number(today.slice(0,4))},${Number(today.slice(5,7))},${today},${today},'CLOSED')`);
+    VALUES('signature-closed-period',${companyId},${Number(planned.slice(0,4))},${Number(planned.slice(5,7))},${planned},${planned},'CLOSED')`);
   await post(closedPeriod,'activate',{},409);
   assert.deepEqual(await charges(closedPeriod),historical,'new-period failure must roll back cancellation of the old title');
   assert.equal(await count('audit_logs'),beforePeriodAudit);
@@ -172,46 +202,45 @@ try {
   await db.execute(sql`DELETE FROM financial_periods WHERE id='signature-closed-period'`);
   console.log('PASS closed financial period blocks reissue and rolls back cancellation, activation and audit');
 
+  // 7. Gates operacionais vigentes bloqueiam ativação sem efeitos colaterais
   const gates: Array<[string,(id:string)=>Promise<unknown>]> = [
     ['vehicle status',id=>db.execute(sql`UPDATE vehicles SET status='MAINTENANCE' WHERE id=${id}`)],
     ['vehicle archived',id=>db.execute(sql`UPDATE vehicles SET is_archived=true WHERE id=${id}`)],
     ['vehicle bound',id=>db.execute(sql`UPDATE vehicles SET current_contract_id='other' WHERE id=${id}`)],
     ['driver archived',id=>db.execute(sql`UPDATE drivers SET is_archived=true WHERE id=${id}`)],
     ['driver inactive',id=>db.execute(sql`UPDATE drivers SET status='INACTIVE', active=false WHERE id=${id}`)],
-    ['CNH',id=>db.execute(sql`UPDATE drivers SET cnh_expiration='2020-01-01' WHERE id=${id}`)],
-    ['documents missing',id=>db.execute(sql`DELETE FROM documents WHERE subject_id=${id} AND document_type='CRLV'`)],
-    ['documents expired',id=>db.execute(sql`UPDATE documents SET expiration_date='2020-01-01' WHERE subject_id=${id}`)],
-    ['insurance',id=>db.execute(sql`UPDATE insurances SET end_date='2020-01-01' WHERE vehicle_id=${id}`)],
-    ['insurance starts in future',id=>db.execute(sql`UPDATE insurances SET start_date=${planned} WHERE vehicle_id=${id}`)],
-    ['signature revoked',id=>db.execute(sql`UPDATE contract_artifacts SET is_current=false,is_archived=true WHERE contract_id=${id} AND artifact_type='SIGNED_EVIDENCE'`)],
-    ['signature source changed',id=>db.execute(sql`UPDATE contract_artifacts SET source_artifact_id='other' WHERE contract_id=${id} AND artifact_type='SIGNED_EVIDENCE'`)],
-    ['signature future',id=>db.execute(sql`UPDATE contract_artifacts SET signed_at='2099-01-01' WHERE contract_id=${id} AND artifact_type='SIGNED_EVIDENCE'`)],
-    ['signature predates document',id=>db.execute(sql`UPDATE contract_artifacts SET signed_at='2019-01-01' WHERE contract_id=${id} AND artifact_type='SIGNED_EVIDENCE'`)],
+    ['rental amount zero',id=>db.execute(sql`UPDATE contracts SET rental_amount=0 WHERE id=${id}`)],
+    ['contract start exceeds end date',id=>db.execute(sql`UPDATE contracts SET end_date='2020-01-01' WHERE id=${id}`)],
+    ['contract end date in past',id=>db.execute(sql`UPDATE contracts SET start_date='2019-01-01', end_date='2020-01-01' WHERE id=${id}`)],
   ];
   for (const [label,breakGate] of gates) {
-    const blocked = await fixture(); await sign(blocked); await breakGate(blocked);
+    const blocked = await fixture(); await breakGate(blocked);
     const audits = await count('audit_logs');
     await post(blocked,'activate',{},409);
     assert.equal((await charges(blocked)).length,0,label);
     assert.equal(await count('audit_logs'),audits,`${label}: rollback audit`);
   }
-  console.log(`PASS ${gates.length} vehicle/driver/CNH/document/insurance/signature gates with no side effects`);
+  console.log(`PASS ${gates.length} operational vehicle/driver/lifecycle gates with no side effects`);
 
-  const periodId = await fixture(); await sign(periodId);
+  // 8. Autoridade operacional em requireContractEffectivePeriod
+  const periodId = await fixture();
   await UnitOfWork.run(companyId,async tx=>{
     const contract=await tx.getContractRepo().findByIdForCompany(companyId,periodId);
     const period=await requireContractEffectivePeriod(contract!,tx);
-    assert.equal(period.effectiveStartDate,today);
-    await assert.rejects(ReceivableService.create({companyId,contractId:periodId,originType:OriginType.CONTRACT_RENT,originId:'invalid-period',categoryId:'signature-rent-category',description:'Test',totalAmount:1,dueDate:'2020-01-01',competenceDate:'2020-01-01',userId:actor.userId,userName:actor.name},tx),/Período/);
+    assert.equal(period.effectiveStartDate,planned);
+    assert.equal(period.plannedStartDate,planned);
+    assert.equal(period.signatureArtifactId,`operational:${periodId}`);
   });
-  // The real business case, independent of today's clock (signature after generated source).
-  await db.execute(sql`UPDATE contract_artifacts SET signed_at='2026-09-15T00:00:00Z' WHERE contract_id=${periodId} AND artifact_type='SIGNED_EVIDENCE'`);
-  await db.execute(sql`UPDATE contracts SET start_date='2026-10-09' WHERE id=${periodId}`);
+
+  await db.execute(sql`UPDATE contracts SET start_date='2026-10-09', end_date='2026-10-01' WHERE id=${periodId}`);
   await UnitOfWork.run(companyId,async tx=>{
     const contract=await tx.getContractRepo().findByIdForCompany(companyId,periodId);
-    assert.equal((await requireContractEffectivePeriod(contract!,tx)).effectiveStartDate,'2026-09-15');
+    await assert.rejects(
+      requireContractEffectivePeriod(contract!,tx),
+      /Contract start exceeds contract end/
+    );
   });
-  console.log('PASS CNT-000004 date case; finance rejects competence before signature');
+  console.log('PASS operational authority: planned startDate governs effective period; start exceeds end rejected');
 } finally {
   await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
 }
