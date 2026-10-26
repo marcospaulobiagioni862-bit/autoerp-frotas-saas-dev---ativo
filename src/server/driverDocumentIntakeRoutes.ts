@@ -142,11 +142,8 @@ function scheduleDocumentAiExtraction(companyId: string, extractionId: string): 
       companyId,
       extractionId,
       `driver-intake-${extractionId}`,
-    ).catch(async (error) => {
-      console.error('AUTOERP_DOCUMENT_AI_DISPATCH_FAILURE', error);
-      try {
-        await DocumentAiQueueService.failPendingExtraction(companyId, extractionId, 'PROVIDER_UNAVAILABLE');
-      } catch {}
+    ).catch(() => {
+      console.error('AUTOERP_DOCUMENT_AI_DISPATCH_FAILURE');
     });
   });
 }

@@ -13,7 +13,7 @@ import {
   VehicleDocumentIntakeReviewSyncError,
   syncVehicleDocumentIntakeHumanReview,
 } from './vehicleDocumentIntakeAiReviewSync';
-import { DOCUMENT_AI_MAX_ATTEMPTS, DocumentAiQueueService } from './documentAiQueue';
+import { DOCUMENT_AI_MAX_ATTEMPTS } from './documentAiQueue';
 import { configuredDocumentAiStorageProvider, isDocumentAiAttachmentEligible } from './documentAiAttachmentPolicy';
 import { createDocumentAiAttachmentStatusSnapshot, createDocumentAiObservabilitySnapshot } from './documentAiObservability';
 import { dispatchDocumentAiExtractionFromEnvironment } from './documentAiRuntime';
@@ -294,12 +294,7 @@ export function registerDocumentAiRoutes(app: Express): void {
       });
       if (result.created && result.item) {
         void dispatchDocumentAiExtractionFromEnvironment(principal.companyId, result.item.id, 'doc-ai-inline')
-          .catch(async (err) => {
-            console.error('AUTOERP_DOCUMENT_AI_INLINE_DISPATCH_FAILURE', err);
-            try {
-              await DocumentAiQueueService.failPendingExtraction(principal.companyId, result.item.id, 'PROVIDER_UNAVAILABLE');
-            } catch {}
-          });
+          .catch((err) => console.error('AUTOERP_DOCUMENT_AI_INLINE_DISPATCH_FAILURE', err));
       }
       res.status(result.created ? 201 : 200).json(result);
     } catch (error) {

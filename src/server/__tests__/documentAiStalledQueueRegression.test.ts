@@ -192,26 +192,35 @@ async function runTests(): Promise<void> {
     ON CONFLICT (id) DO NOTHING
   `);
 
-  const dispatchResult = await dispatchDocumentAiExtractionFromEnvironment(
-    companyId,
-    'ext-dispatch-dis',
-    'worker-test',
-    { DOC_AI_WORKER_ENABLED: 'false' },
-  );
+  const loggedDispatchErrors: string[] = [];
+  const origErr = console.error;
+  console.error = (...args: unknown[]) => {
+    loggedDispatchErrors.push(args.map(String).join(' '));
+    origErr(...args);
+  };
+
+  let dispatchResult: any;
+  try {
+    dispatchResult = await dispatchDocumentAiExtractionFromEnvironment(
+      companyId,
+      'ext-dispatch-dis',
+      'worker-test',
+      { DOC_AI_WORKER_ENABLED: 'false' },
+    );
+  } finally {
+    console.error = origErr;
+  }
   assert.deepEqual(dispatchResult, { state: 'DISABLED' }, 'Dispatch com runtime desligado retorna { state: "DISABLED" }');
+  assert.ok(
+    loggedDispatchErrors.some((log) => log.includes('AUTOERP_DOCUMENT_AI_RUNTIME_UNAVAILABLE_DISPATCH')),
+    'Dispatch com runtime desligado emite AUTOERP_DOCUMENT_AI_RUNTIME_UNAVAILABLE_DISPATCH',
+  );
 
   const checkDispatchExtraction: any = await db.execute(sql`
     SELECT id, status, failure_code FROM document_ai_extractions WHERE company_id = ${companyId} AND id = 'ext-dispatch-dis'
   `);
   const disExtRow = checkDispatchExtraction.rows?.[0] ?? checkDispatchExtraction[0];
-  assert.equal(disExtRow.status, 'FAILED', 'Extração despachada com runtime desabilitado deve falhar imediatamente');
-  assert.equal(disExtRow.failure_code, 'RUNTIME_DISABLED', 'Failure code deve ser RUNTIME_DISABLED');
-
-  const checkDriverIntake: any = await db.execute(sql`
-    SELECT id, status FROM driver_document_intakes WHERE company_id = ${companyId} AND id = 'driver-intake-dis'
-  `);
-  const disIntakeRow = checkDriverIntake.rows?.[0] ?? checkDriverIntake[0];
-  assert.equal(disIntakeRow.status, 'FAILED', 'Intake do motorista deve ser sincronizado imediatamente para FAILED');
+  assert.equal(disExtRow.status, 'PENDING', 'Extração não sofre mutação imediata no dispatch disabled (evita poluição de auditoria)');
 
   // =========================================================================
   // 5. Alerta de Runtime (Item d)

@@ -92,7 +92,7 @@ assert.match(
   'out-of-use confirmation must preserve the explicit history warning',
 );
 
-assert.match(intakeSource, /const failed=extraction\?\.status==='FAILED';/, 'vehicle document intake must expose a failed analysis state');
+assert.match(intakeSource, /const failed=extraction\?\.status==='FAILED'(\|\|timedOut)?;/, 'vehicle document intake must expose a failed analysis state');
 assert.match(intakeSource, /Análise falhou/, 'failed analysis must have a visible status');
 assert.match(intakeSource, /DocumentAiClient\.retry\(extraction\.id\)/, 'failed analysis must reuse the authoritative retry endpoint');
 assert.match(intakeSource, /Tentar análise novamente/, 'failed analysis must expose an explicit retry action');

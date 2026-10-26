@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import express, { type NextFunction, type Request, type Response as ExpressResponse } from 'express';
 import { createServer } from 'node:http';
 import { and, eq, sql } from 'drizzle-orm';
@@ -22,8 +23,32 @@ async function json(response: globalThis.Response): Promise<any> {
   return text ? JSON.parse(text) : null;
 }
 
+async function ensureCanonicalTables(): Promise<void> {
+  const regCheck: any = await db.execute(sql`SELECT to_regclass('companies') AS tbl`);
+  const hasCompanies = Boolean(regCheck.rows?.[0]?.tbl || regCheck[0]?.tbl);
+
+  if (!hasCompanies) {
+    const client = (db as any).$client;
+    if (client && typeof client.exec === 'function') {
+      const migrationFiles = readdirSync('drizzle')
+        .filter((name) => name.endsWith('.sql'))
+        .sort();
+      for (const file of migrationFiles) {
+        const sqlContent = readFileSync(`drizzle/${file}`, 'utf8');
+        await client.exec(sqlContent);
+      }
+    } else {
+      throw new Error(
+        'Tabela "companies" não encontrada e a conexão não é PGlite. ' +
+        'Este teste requer que as migrações canônicas tenham sido executadas (job integration do CI via migrate_test_db.cjs).'
+      );
+    }
+  }
+}
+
 export class DocumentAiAuthorityIntegrationRunner {
   static async runAllTests(): Promise<void> {
+    await ensureCanonicalTables();
     await db.execute(sql`
       INSERT INTO companies (id, name, status, created_at, updated_at) VALUES
         (${companyA}, 'DOC AI Company A', 'ACTIVE', NOW(), NOW()),
