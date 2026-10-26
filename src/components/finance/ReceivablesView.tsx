@@ -229,6 +229,9 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
  try {
  const item = receivables.find((receivable) => receivable.id === cancelTargetId);
  if (!item) throw new Error('Título a receber não encontrado na lista atual.');
+ if (item.originType === OriginType.TRAFFIC_TICKET_DRIVER) {
+ throw new Error('Não é possível cancelar título vinculado a multa de trânsito diretamente pelo financeiro. Cancele a multa pela tela de Gestão de Multas para manter a consistência do processo.');
+ }
  await FinanceObligationClient.cancelReceivable(cancelTargetId, 'Cancelamento via interface');
  setActionMessage('Título a receber cancelado com sucesso.');
  setCancelTargetId(null);

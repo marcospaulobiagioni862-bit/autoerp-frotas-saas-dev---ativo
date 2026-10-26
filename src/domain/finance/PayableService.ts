@@ -194,7 +194,10 @@ export class PayableService {
     reason: string,
     userId: string,
     userName: string,
-    txContext?: ITransactionContext
+    txContext?: ITransactionContext,
+    options?: {
+      allowTrafficTicketCancellation?: boolean;
+    }
   ): Promise<AccountPayable> {
     await FinancialAuthorizationService.authorize(
       userId,
@@ -227,6 +230,17 @@ export class PayableService {
 
     if (payable.status === ObligationStatus.CANCELLED) {
       throw new Error('Título já se encontra cancelado');
+    }
+
+    if (
+      !options?.allowTrafficTicketCancellation &&
+      (payable.originType === OriginType.TRAFFIC_TICKET_COMPANY ||
+        payable.originType === OriginType.TRAFFIC_TICKET_NIC ||
+        payable.originType === OriginType.TRAFFIC_TICKET_DRIVER)
+    ) {
+      throw new Error(
+        'Não é possível cancelar título vinculado a multa de trânsito diretamente pelo financeiro. Cancele a multa pela tela de Gestão de Multas para manter a consistência do processo.'
+      );
     }
 
     if (payable.paidAmount > 0 || payable.status === ObligationStatus.PAID) {

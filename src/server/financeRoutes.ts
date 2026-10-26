@@ -56,6 +56,10 @@ function sendFinanceCommandError(res: Response, error: unknown): void {
     res.status(409).json({ error: message, code: 'PAYABLE_INSTALLMENT_ORDER' });
     return;
   }
+  if (message.includes('multa de trânsito') || message.includes('Gestão de Multas')) {
+    res.status(409).json({ error: message, code: 'TRAFFIC_TICKET_OBLIGATION_CANCELLATION_BLOCKED' });
+    return;
+  }
   if (message.includes('não encontrada') || message.includes('não encontrado')) {
     res.status(404).json({ error: 'Not found' });
     return;

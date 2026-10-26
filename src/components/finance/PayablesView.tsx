@@ -188,6 +188,9 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
  setCancelTargetId(null);
  return;
  }
+ if (item.originType === OriginType.TRAFFIC_TICKET_COMPANY || item.originType === OriginType.TRAFFIC_TICKET_NIC) {
+ throw new Error('Não é possível cancelar título vinculado a multa de trânsito diretamente pelo financeiro. Cancele a multa pela tela de Gestão de Multas para manter a consistência do processo.');
+ }
  await FinanceObligationClient.cancelPayable(cancelTargetId, 'Cancelamento manual via interface');
  setActionMessage('Título a pagar cancelado com sucesso.');
  setCancelTargetId(null);

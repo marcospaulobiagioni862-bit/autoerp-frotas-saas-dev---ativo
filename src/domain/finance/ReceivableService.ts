@@ -215,7 +215,10 @@ export class ReceivableService {
     reason: string,
     userId: string,
     userName: string,
-    txContext?: ITransactionContext
+    txContext?: ITransactionContext,
+    options?: {
+      allowTrafficTicketCancellation?: boolean;
+    }
   ): Promise<AccountReceivable> {
     await FinancialAuthorizationService.authorize(
       userId,
@@ -248,6 +251,17 @@ export class ReceivableService {
 
     if (receivable.status === ObligationStatus.CANCELLED) {
       throw new Error('Título já se encontra cancelado');
+    }
+
+    if (
+      !options?.allowTrafficTicketCancellation &&
+      (receivable.originType === OriginType.TRAFFIC_TICKET_DRIVER ||
+        receivable.originType === OriginType.TRAFFIC_TICKET_COMPANY ||
+        receivable.originType === OriginType.TRAFFIC_TICKET_NIC)
+    ) {
+      throw new Error(
+        'Não é possível cancelar título vinculado a multa de trânsito diretamente pelo financeiro. Cancele a multa pela tela de Gestão de Multas para manter a consistência do processo.'
+      );
     }
 
     if (receivable.paidAmount > 0 || receivable.status === ObligationStatus.PAID) {

@@ -212,11 +212,11 @@ function projected(ticket:TrafficTicket,financial:TrafficTicketFinancialState):T
 }
 async function cancelReceivableIfOpen(tx:any,principal:AuthenticatedPrincipal,id?:string):Promise<void>{
   if(!id)return;const item=await tx.getReceivableRepo().findById(id);if(!item||item.status===ObligationStatus.CANCELLED)return;
-  await ReceivableService.cancelReceivable(principal.companyId,id,'Alteração/cancelamento da multa',principal.userId,principal.name,tx);
+  await ReceivableService.cancelReceivable(principal.companyId,id,'Alteração/cancelamento da multa',principal.userId,principal.name,tx,{allowTrafficTicketCancellation:true});
 }
 async function cancelPayableIfOpen(tx:any,principal:AuthenticatedPrincipal,id?:string):Promise<void>{
   if(!id)return;const item=await tx.getPayableRepo().findById(id);if(!item||item.status===ObligationStatus.CANCELLED)return;
-  await PayableService.cancelPayable(principal.companyId,id,'Alteração/cancelamento da multa',principal.userId,principal.name,tx);
+  await PayableService.cancelPayable(principal.companyId,id,'Alteração/cancelamento da multa',principal.userId,principal.name,tx,{allowTrafficTicketCancellation:true});
 }
 async function audit(tx:any,principal:AuthenticatedPrincipal,action:AuditAction,before:TrafficTicket|null,after:TrafficTicket):Promise<void>{
   await tx.getAuditLogRepo().create({

@@ -67,9 +67,13 @@ export class FinanceEngine {
     receivableId: string,
     reason: string,
     userId: string,
-    userName: string
+    userName: string,
+    txContext?: ITransactionContext,
+    options?: {
+      allowTrafficTicketCancellation?: boolean;
+    }
   ): Promise<AccountReceivable> {
-    return ReceivableService.cancelReceivable(companyId, receivableId, reason, userId, userName);
+    return ReceivableService.cancelReceivable(companyId, receivableId, reason, userId, userName, txContext, options);
   }
 
   // 2. Payables
@@ -82,9 +86,13 @@ export class FinanceEngine {
     payableId: string,
     reason: string,
     userId: string,
-    userName: string
+    userName: string,
+    txContext?: ITransactionContext,
+    options?: {
+      allowTrafficTicketCancellation?: boolean;
+    }
   ): Promise<AccountPayable> {
-    return PayableService.cancelPayable(companyId, payableId, reason, userId, userName);
+    return PayableService.cancelPayable(companyId, payableId, reason, userId, userName, txContext, options);
   }
 
   // 3. Receipt / Payment Settlement
