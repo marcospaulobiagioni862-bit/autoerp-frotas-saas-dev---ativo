@@ -3,14 +3,15 @@ import { userCredentials, UserCredentialRow } from '../authSchema';
 import { recordCredentialAuditEvent } from '../../server/credentialAudit';
 
 export interface SetPasswordCredentialInput {
-  companyId?: string;
+  companyId: string;
   userId: string;
   passwordHash: string;
-  auditActor?: {
+  auditActor: {
     userId: string;
     userName: string;
-    origin?: string;
-    ipAddress?: string;
+    origin: string;
+    event?: 'BOOTSTRAP_FIRST_ADMIN_CREDENTIAL' | 'PASSWORD_RESET_ADMIN' | 'PASSWORD_CHANGE_SELF' | 'SEED_DEMO_CREDENTIAL';
+    ipAddress?: string | null;
   };
 }
 
@@ -33,20 +34,25 @@ export class PostgresAuthCredentialRepository {
   }
 
   async setPasswordHash(input: SetPasswordCredentialInput): Promise<UserCredentialRow> {
+    if (!input.companyId || !input.auditActor || !input.auditActor.userId) {
+      throw new Error('AUTH_CREDENTIAL_AUDIT_REQUIRED');
+    }
+
+    const now = new Date().toISOString();
     const results = await this.tx
       .insert(userCredentials)
       .values({
-        companyId: input.companyId || null,
+        companyId: input.companyId,
         userId: input.userId,
         passwordHash: input.passwordHash,
-        passwordUpdatedAt: new Date().toISOString(),
+        passwordUpdatedAt: now,
       })
       .onConflictDoUpdate({
         target: [userCredentials.userId],
         set: {
-          companyId: input.companyId || null,
+          companyId: input.companyId,
           passwordHash: input.passwordHash,
-          passwordUpdatedAt: new Date().toISOString(),
+          passwordUpdatedAt: now,
         },
       })
       .returning();
@@ -56,18 +62,17 @@ export class PostgresAuthCredentialRepository {
       throw new Error('AUTH_CREDENTIAL_WRITE_FAILED');
     }
 
-    if (input.auditActor && input.companyId) {
-      await recordCredentialAuditEvent(this.tx, {
-        companyId: input.companyId,
-        actorUserId: input.auditActor.userId,
-        actorUserName: input.auditActor.userName,
-        targetUserId: input.userId,
-        action: 'UPDATE',
-        event: 'PASSWORD_RESET_ADMIN',
-        origin: input.auditActor.origin || 'AUTH_REPOSITORY',
-        ipAddress: input.auditActor.ipAddress,
-      });
-    }
+    await recordCredentialAuditEvent(this.tx, {
+      companyId: input.companyId,
+      actorUserId: input.auditActor.userId,
+      actorUserName: input.auditActor.userName,
+      targetUserId: input.userId,
+      action: 'UPDATE',
+      event: input.auditActor.event || 'PASSWORD_RESET_ADMIN',
+      origin: input.auditActor.origin || 'AUTH_REPOSITORY',
+      ipAddress: input.auditActor.ipAddress,
+      timestamp: now,
+    });
 
     return credential;
   }
