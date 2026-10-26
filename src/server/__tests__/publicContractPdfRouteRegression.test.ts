@@ -24,15 +24,44 @@ const driverId = 'drv-ph069-01';
 const vehicleId = 'veh-ph069-01';
 const templateId = 'tmpl-ph069-01';
 
+async function cleanTestData(): Promise<void> {
+  // Limpeza isolada apenas das entidades criadas para este teste.
+  // Regra 3.2 do CLAUDE.md: NUNCA executar DELETE em audit_logs (append-only trigger).
+  await db.execute(sql`DELETE FROM contract_artifacts WHERE company_id = ${companyId}`);
+  await db.execute(sql`DELETE FROM contracts WHERE company_id = ${companyId}`);
+  await db.execute(sql`DELETE FROM contract_templates WHERE company_id = ${companyId}`);
+  await db.execute(sql`DELETE FROM drivers WHERE company_id = ${companyId}`);
+  await db.execute(sql`DELETE FROM vehicles WHERE company_id = ${companyId}`);
+  await db.execute(sql`DELETE FROM users WHERE company_id = ${companyId}`);
+  await db.execute(sql`DELETE FROM companies WHERE id = ${companyId}`);
+}
+
 async function setupFixtures(): Promise<void> {
-  const client = (db as any).$client;
-  if (client && typeof client.exec === 'function') {
-    for (const file of readdirSync('drizzle').filter(name => name.endsWith('.sql')).sort()) {
-      try {
-        await client.exec(readFileSync(`drizzle/${file}`, 'utf8'));
-      } catch {}
+  // Bloqueador 2: verificar se o schema de tabelas existe.
+  // Em CI (job integration), migrate_test_db.cjs já rodou e as tabelas já existem.
+  // Em ambiente local PGlite sem migrations prévias, aplica sem catch cego.
+  const regCheck: any = await db.execute(sql`SELECT to_regclass('companies') AS tbl`);
+  const hasCompanies = Boolean(regCheck.rows?.[0]?.tbl || regCheck[0]?.tbl);
+
+  if (!hasCompanies) {
+    const client = (db as any).$client;
+    if (client && typeof client.exec === 'function') {
+      const migrationFiles = readdirSync('drizzle')
+        .filter((name) => name.endsWith('.sql'))
+        .sort();
+      for (const file of migrationFiles) {
+        const sqlContent = readFileSync(`drizzle/${file}`, 'utf8');
+        await client.exec(sqlContent);
+      }
+    } else {
+      throw new Error(
+        'Tabela "companies" não encontrada e a conexão não é PGlite. ' +
+        'Este teste requer que as migrações canônicas tenham sido executadas (job integration do CI via migrate_test_db.cjs).'
+      );
     }
   }
+
+  await cleanTestData();
 
   await db.execute(sql`
     INSERT INTO companies (id, name, document, status, created_at, updated_at) VALUES
@@ -119,7 +148,7 @@ export async function runPublicContractPdfRouteRegression(): Promise<void> {
 
   try {
     // 2. Criar contrato e gerar PDF através das rotas autenticadas
-    console.log('  [1/7] Criando contrato e gerando PDF autenticado...');
+    console.log('  [1/6] Criando contrato e gerando PDF autenticado...');
     const createRes = await fetch(`${base}/api/contracts`, {
       method: 'POST',
       headers: {
@@ -169,7 +198,7 @@ export async function runPublicContractPdfRouteRegression(): Promise<void> {
     assert(validToken, 'share-link deve devolver token HMAC válido');
 
     // 3. Auditoria Caso A: SEM sessão e COM token válido -> 200 OK (Content-Type: application/pdf)
-    console.log('  [2/7] Testando acesso público SEM sessão e COM token válido...');
+    console.log('  [2/6] Testando acesso público SEM sessão e COM token válido...');
     const publicPdfRes = await fetch(`${base}/api/public/contracts/${contractId}/pdf?token=${encodeURIComponent(validToken)}`);
     assert.equal(publicPdfRes.status, 200, `Acesso público com token válido esperava 200, obteve ${publicPdfRes.status}`);
     assert.equal(publicPdfRes.headers.get('content-type'), 'application/pdf', 'Content-Type deve ser application/pdf');
@@ -186,15 +215,15 @@ export async function runPublicContractPdfRouteRegression(): Promise<void> {
     console.log('    ✓ Caso A aprovado: motorista visualiza PDF sem autenticação de sessão.');
 
     // 4. Auditoria Caso B: SEM sessão e SEM token -> 401 Unauthorized (NUNCA 200)
-    console.log('  [3/7] Testando acesso público SEM sessão e SEM token...');
+    console.log('  [3/6] Testando acesso público SEM sessão e SEM token...');
     const noTokenRes = await fetch(`${base}/api/public/contracts/${contractId}/pdf`);
     assert.equal(noTokenRes.status, 401, `Acesso sem token esperava 401, obteve ${noTokenRes.status}`);
     const noTokenJson = (await noTokenRes.json()) as any;
     assert.equal(noTokenJson.error, 'Token de compartilhamento não fornecido.');
     console.log('    ✓ Caso B aprovado: requisição sem token é rejeitada com 401.');
 
-    // 5. Auditoria Caso C: SEM sessão e COM token de OUTRO contrato -> 401 Unauthorized
-    console.log('  [4/7] Testando acesso público SEM sessão com token de OUTRO contrato...');
+    // 5. Auditoria Caso C (IDOR Protection): SEM sessão e COM token de OUTRO contrato -> 401 Unauthorized
+    console.log('  [4/6] Testando acesso público SEM sessão com token de OUTRO contrato (anti-IDOR)...');
     const otherContractId = 'cnt-other-contract-999';
     const otherContractToken = createContractShareToken(companyId, otherContractId);
     const wrongContractRes = await fetch(`${base}/api/public/contracts/${contractId}/pdf?token=${encodeURIComponent(otherContractToken)}`);
@@ -203,8 +232,8 @@ export async function runPublicContractPdfRouteRegression(): Promise<void> {
     assert.equal(wrongContractJson.error, 'Token de compartilhamento inválido ou expirado.');
     console.log('    ✓ Caso C aprovado: token emitido para outro contrato é estritamente rejeitado.');
 
-    // 6. Auditoria Caso D: SEM sessão e COM token EXPIRADO -> 401 Unauthorized
-    console.log('  [5/7] Testando acesso público SEM sessão com token EXPIRADO...');
+    // 6. Auditoria Caso D (Expiration): SEM sessão e COM token EXPIRADO -> 401 Unauthorized
+    console.log('  [5/6] Testando acesso público SEM sessão com token EXPIRADO...');
     const expiredToken = createContractShareToken(companyId, contractId, 0, -3600); // Expirado há 1 hora
     const expiredRes = await fetch(`${base}/api/public/contracts/${contractId}/pdf?token=${encodeURIComponent(expiredToken)}`);
     assert.equal(expiredRes.status, 401, `Token expirado esperava 401, obteve ${expiredRes.status}`);
@@ -212,87 +241,88 @@ export async function runPublicContractPdfRouteRegression(): Promise<void> {
     assert.equal(expiredJson.error, 'Token de compartilhamento inválido ou expirado.');
     console.log('    ✓ Caso D aprovado: token expirado é estritamente rejeitado.');
 
-    // 7. Auditoria Caso E: SEM sessão e COM token ADULTERADO -> 401 Unauthorized
-    console.log('  [6/7] Testando acesso público SEM sessão com token ADULTERADO...');
+    // 7. Auditoria Caso E (Integrity): SEM sessão e COM token ADULTERADO -> 401 Unauthorized
     const tamperedToken = validToken.slice(0, -3) + (validToken.endsWith('abc') ? 'xyz' : 'abc');
     const tamperedRes = await fetch(`${base}/api/public/contracts/${contractId}/pdf?token=${encodeURIComponent(tamperedToken)}`);
     assert.equal(tamperedRes.status, 401, `Token adulterado esperava 401, obteve ${tamperedRes.status}`);
     console.log('    ✓ Caso E aprovado: token com assinatura HMAC adulterada é rejeitado.');
 
-    // 8. Auditoria de Superfície e Rotas Privadas
-    console.log('  [7/7] Verificando isolamento: rotas privadas SEM sessão continuam bloqueadas...');
+    // 8. Auditoria de Rotas Privadas: rotas privadas SEM sessão continuam bloqueadas
     const privateRes = await fetch(`${base}/api/contracts`);
     assert.equal(privateRes.status, 401, `Rota privada /api/contracts sem sessão esperava 401, obteve ${privateRes.status}`);
 
     const privateDetailRes = await fetch(`${base}/api/contracts/${contractId}`);
     assert.equal(privateDetailRes.status, 401, `Rota privada /api/contracts/:id sem sessão esperava 401, obteve ${privateDetailRes.status}`);
 
-    // Invariante de superfície de rotas: verificar as rotas registradas antes do middleware
-    const routerStack = (app._router as { stack: Array<{ route?: { path?: string; methods?: Record<string, boolean> } }> }).stack;
-    const routesBeforeMiddleware: string[] = [];
-    for (const layer of routerStack) {
-      if (layer.route && layer.route.path) {
-        routesBeforeMiddleware.push(layer.route.path);
-      }
-      // O middleware de autenticação é anônimo sob /api
-      if (!layer.route && (layer as any).handle && (layer as any).regexp && String((layer as any).regexp).includes('api')) {
-        break;
-      }
-    }
+    // 9. Bloqueador 4: INVARIANTE DE SUPERFÍCIE REAL SOBRE O ARQUIVO server.ts
+    console.log('  [6/6] Verificando invariante de superfície real no código de server.ts...');
+    const serverFilePath = join(process.cwd(), 'server.ts');
+    const serverCode = readFileSync(serverFilePath, 'utf8');
+
+    // Localizar a posição do middleware global de autenticação
+    const authMiddlewarePattern = /app\.use\(\s*['"]\/api['"]\s*,\s*async\s*\(\s*req:\s*Request/g;
+    const authMatch = authMiddlewarePattern.exec(serverCode);
+    assert(authMatch, 'server.ts deve conter o middleware global app.use(\'/api\', async (req: Request, ...))');
+    const authMiddlewareIndex = authMatch.index;
+
+    // Verificar que registerPublicContractRoutes é chamado ANTES do middleware
+    const publicCallIndex = serverCode.indexOf('registerPublicContractRoutes(app)');
+    assert(publicCallIndex > 0, 'server.ts deve invocar registerPublicContractRoutes(app)');
     assert(
-      routesBeforeMiddleware.includes('/api/public/contracts/:id/pdf'),
-      'Rota pública de PDF deve estar registrada ANTES do middleware autenticado de /api'
+      publicCallIndex < authMiddlewareIndex,
+      'registerPublicContractRoutes(app) DEVE ser registrado ANTES do middleware global de autenticação em server.ts'
     );
-    // Assegura que nenhuma rota privada sob /api foi registrada antes do middleware
-    for (const r of routesBeforeMiddleware) {
+
+    // Verificar que registerVehicleRoutes (onde moram rotas privadas de contratos) é chamado DEPOIS do middleware
+    const vehicleRoutesIndex = serverCode.indexOf('registerVehicleRoutes(app)');
+    assert(vehicleRoutesIndex > 0, 'server.ts deve invocar registerVehicleRoutes(app)');
+    assert(
+      vehicleRoutesIndex > authMiddlewareIndex,
+      'registerVehicleRoutes(app) DEVE ser registrado DEPOIS do middleware global de autenticação em server.ts'
+    );
+
+    // Listar todas as rotas sob /api registradas antes do middleware em server.ts
+    const preMiddlewareCode = serverCode.slice(0, authMiddlewareIndex);
+    const preRouteMatches = [...preMiddlewareCode.matchAll(/app\.(get|post|put|delete|patch|use)\(\s*['"](\/api[^'"]*)['"]/g)].map(
+      (m) => m[2]
+    );
+
+    // As únicas rotas sob /api permitidas antes do middleware global são exatamente as 4 canônicas + cache header
+    const allowedCanonicalPreRoutes = new Set([
+      '/api', // header no-store em server.ts:215
+      '/api/csp-report',
+      '/api/auth/bootstrap',
+      '/api/auth/login',
+      '/api/auth/logout',
+    ]);
+
+    for (const route of preRouteMatches) {
       assert(
-        r === '/api/public/contracts/:id/pdf' || !r.startsWith('/api/'),
-        `Nenhuma rota privada sob /api pode estar registrada antes do middleware! Encontrada: ${r}`
+        allowedCanonicalPreRoutes.has(route),
+        `VIOLAÇÃO DE SUPERFÍCIE: rota não-autorizada encontrada antes do middleware de autenticação em server.ts: "${route}"`
       );
     }
-    console.log('    ✓ Superfície aprovada: apenas rotas públicas legítimas estão expostas antes do middleware.');
 
-    // 9. PROVA DE MUTAÇÃO (Regra 3.2-d do CLAUDE.md e Auditoria PH-069)
-    console.log('  [PROVA DE MUTAÇÃO] Verificando que a validação de token não é decorativa...');
-    function simulatedMutatedHandler(tokenProvided: boolean, tokenValid: boolean): { status: number } {
-      // Se a mutação remover a checagem de token:
-      // if (!token) { res.status(401)... } // REMOVIDO PELA MUTAÇÃO
-      // if (!verified) { res.status(401)... } // REMOVIDO PELA MUTAÇÃO
-      const isCheckActive = true; // No código real
-      if (isCheckActive) {
-        if (!tokenProvided || !tokenValid) {
-          return { status: 401 };
-        }
-      }
-      return { status: 200 };
+    // Assegura que nenhuma função de rotas privadas de domínio foi registrada antes do middleware
+    const domainRouters = [
+      'registerVehicleRoutes',
+      'registerFinanceRoutes',
+      'registerOpsHealthRoutes',
+      'registerDriverRoutes',
+      'registerContractRoutes',
+    ];
+    for (const router of domainRouters) {
+      const idx = preMiddlewareCode.indexOf(`${router}(app)`);
+      assert.equal(
+        idx,
+        -1,
+        `VIOLAÇÃO DE SEGURANÇA: ${router}(app) não pode ser chamado antes do middleware de autenticação em server.ts!`
+      );
     }
-
-    // Conferir que, no código real, token ausente ou inválido resulta em 401
-    assert.equal(simulatedMutatedHandler(false, false).status, 401);
-    assert.equal(simulatedMutatedHandler(true, false).status, 401);
-
-    // Agora simula o código MUTADO (onde a guarda foi removida)
-    function mutatedVulnerableHandler(tokenProvided: boolean, tokenValid: boolean): { status: number } {
-      const isCheckActive = false; // MUTAÇÃO
-      if (isCheckActive) {
-        if (!tokenProvided || !tokenValid) {
-          return { status: 401 };
-        }
-      }
-      return { status: 200 };
-    }
-
-    // A mutação produziria status 200 para token ausente/inválido.
-    // O teste real falharia com assert.equal(status, 401).
-    const mutatedResult = mutatedVulnerableHandler(false, false);
-    assert.equal(
-      mutatedResult.status,
-      200,
-      'Mutação sem guarda deve produzir 200, comprovando que a asserção do teste 401 falharia e acusaria a regressão!'
-    );
-    console.log('    ✓ Prova de mutação confirmada: teste rejeita mutação e protege contra afrouxamento de guarda.');
+    console.log('    ✓ Invariante de superfície de server.ts comprovada: apenas as 4 rotas públicas canônicas + registerPublicContractRoutes estão antes do middleware.');
 
   } finally {
+    await cleanTestData();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     process.env.ATTACHMENT_STORAGE_DIR = originalStorageDir;
     process.env.JWT_SECRET = originalJwtSecret;

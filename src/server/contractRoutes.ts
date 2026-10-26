@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { UnitOfWork } from '../db/uow';
 import { ReceivableService } from '../domain/finance/ReceivableService';
 import { assertFinancialCategoryForObligation } from '../domain/finance/FinancialCategoryAuthority';
@@ -84,6 +85,16 @@ export function verifyContractShareToken(token: string): { companyId: string; co
 
 const PUBLIC_CONTRACT_ROUTES_REGISTERED = Symbol.for('AUTOERP_PUBLIC_CONTRACT_ROUTES_REGISTERED');
 
+// Rate limiter específico para download público de PDF de contrato (Regra 3.2-a e Bloqueador 5 do PH-069).
+// Evita que a rota aberta antes do middleware vire vetor de DoS contra o banco e o storage de arquivos.
+export const publicContractPdfRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Muitas requisições para visualização de contratos. Tente novamente em alguns minutos.' },
+});
+
 export function registerPublicContractRoutes(app: Express): void {
   if ((app as any)[PUBLIC_CONTRACT_ROUTES_REGISTERED]) {
     return;
@@ -93,7 +104,7 @@ export function registerPublicContractRoutes(app: Express): void {
   // PH-069: Public contract PDF access via HMAC share token.
   // Registered BEFORE the authenticated /api middleware so drivers without active session
   // can view the contract from WhatsApp (wa.me) links. The share token is the sole authority.
-  app.get('/api/public/contracts/:id/pdf', async (req: Request, res: Response) => {
+  app.get('/api/public/contracts/:id/pdf', publicContractPdfRateLimiter, async (req: Request, res: Response) => {
     const rawId = req.params.id;
     const contractId = typeof rawId === 'string' ? rawId.trim() : '';
     if (!contractId) {
