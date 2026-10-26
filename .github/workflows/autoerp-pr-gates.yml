@@ -755,6 +755,13 @@ jobs:
       - name: Browser tab branding and multitenant title invariants
         run: npm run test:browser-tab-branding
 
+      - name: Vitest suites (*.spec.ts)
+        # AUTOERP-40: o Vitest foi adotado em 2026-10-06 (f2b53597) e ficou FORA do portao.
+        # As suites .spec.ts passavam em 7s sem nunca proteger nada - garantia falsa, o mesmo
+        # defeito que este workflow ja teve no portao DOC-AI-1B4. Entram aqui, no validate-fast,
+        # porque nenhuma delas toca banco (conferido: zero import de db/drizzle/UnitOfWork).
+        run: npm test
+
       - name: Contract PDF visual overlays regression
         run: npm run test:contract-pdf-overlays
 
