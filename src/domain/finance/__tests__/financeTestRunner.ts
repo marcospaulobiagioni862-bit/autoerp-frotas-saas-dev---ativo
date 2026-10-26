@@ -96,7 +96,7 @@ export class FinanceTestRunner {
     await test(1, '01. Criar AccountReceivable', async () => {
       const created = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-req-01',
         categoryId: defaultCategory,
         description: 'Aluguel Semanal T1',
@@ -138,7 +138,7 @@ export class FinanceTestRunner {
     await test(3, '03. Registrar Receipt integral', async () => {
       const rec = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-full-receipt',
         categoryId: defaultCategory,
         description: 'Aluguel Integral',
@@ -260,7 +260,7 @@ export class FinanceTestRunner {
     await test(8, '08. Atualizar corretamente o status PARTIALLY_SETTLED', async () => {
       const rec = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-part-status',
         categoryId: defaultCategory,
         description: 'Teste Status Parcial',
@@ -289,7 +289,7 @@ export class FinanceTestRunner {
     await test(9, '09. Atualizar corretamente o status SETTLED', async () => {
       const rec = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-settled-status',
         categoryId: defaultCategory,
         description: 'Teste Status Liquidado',
@@ -318,7 +318,7 @@ export class FinanceTestRunner {
     await test(10, '10. Calcular juros', async () => {
       const rec = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-interest-test',
         categoryId: defaultCategory,
         description: 'Teste Juros',
@@ -348,7 +348,7 @@ export class FinanceTestRunner {
     await test(11, '11. Calcular multa', async () => {
       const rec = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-fine-test',
         categoryId: defaultCategory,
         description: 'Teste Multa',
@@ -378,7 +378,7 @@ export class FinanceTestRunner {
     await test(12, '12. Aplicar desconto', async () => {
       const rec = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-discount-test',
         categoryId: defaultCategory,
         description: 'Teste Desconto',
@@ -408,7 +408,7 @@ export class FinanceTestRunner {
     await test(13, '13. Fazer estorno total', async () => {
       const rec = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-estorno-tot',
         categoryId: defaultCategory,
         description: 'Estorno Total',
@@ -447,7 +447,7 @@ export class FinanceTestRunner {
     await test(14, '14. Fazer estorno parcial', async () => {
       const rec = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-estorno-parc',
         categoryId: defaultCategory,
         description: 'Estorno Parcial',
@@ -526,7 +526,7 @@ export class FinanceTestRunner {
       const receivableRepo = new AccountReceivableRepository();
       const damageReceivable = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.MANUAL,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'damage-compensation-17',
         categoryId: defaultCategory,
         description: 'Avaria em para-choque',
@@ -641,7 +641,7 @@ export class FinanceTestRunner {
     await test(20, '20. Gerar cobrança recorrente semanal', async () => {
       const created = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-weekly-01',
         categoryId: defaultCategory,
         description: 'Aluguel Semanal Recorrente',
@@ -662,7 +662,7 @@ export class FinanceTestRunner {
     await test(21, '21. Gerar cobrança recorrente mensal', async () => {
       const created = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-monthly-01',
         categoryId: defaultCategory,
         description: 'Aluguel Mensal Recorrente',
@@ -682,7 +682,7 @@ export class FinanceTestRunner {
     await test(22, '22. Executar geração recorrente duas vezes e validar idempotência', async () => {
       const run1 = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-idempotency-check',
         categoryId: defaultCategory,
         description: 'Cobrança Idempotente',
@@ -695,7 +695,7 @@ export class FinanceTestRunner {
 
       const run2 = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-idempotency-check',
         categoryId: defaultCategory,
         description: 'Cobrança Idempotente T2',
@@ -976,7 +976,7 @@ export class FinanceTestRunner {
     await test(33, '33. Renegociar obrigação financeira preservando o título original e o histórico', async () => {
       const rec1 = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-reneg-old-1',
         categoryId: defaultCategory,
         description: 'Título Antigo Atrasado 1',
@@ -987,7 +987,7 @@ export class FinanceTestRunner {
       });
       const rec2 = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-reneg-old-2',
         categoryId: defaultCategory,
         description: 'Título Antigo Atrasado 2',
@@ -1020,7 +1020,7 @@ export class FinanceTestRunner {
     await test(34, '34. Registrar recebimento via PIX em conta bancária e recebimento em dinheiro no Caixa', async () => {
       const recPix = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-pix-test',
         categoryId: defaultCategory,
         description: 'Aluguel via PIX',
@@ -1031,7 +1031,7 @@ export class FinanceTestRunner {
       });
       const recCash = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-cash-test',
         categoryId: defaultCategory,
         description: 'Aluguel em Dinheiro',
@@ -1195,22 +1195,13 @@ export class FinanceTestRunner {
       });
 
       // Verify no AccountReceivable was generated for this draft contract
-      const receivables = await FinanceEngine.createReceivable({
-        companyId,
-        originType: OriginType.CONTRACT_RENT,
-        originId: contract.id,
-        categoryId: defaultCategory,
-        description: 'Aluguel Rascunho',
-        totalAmount: 500,
-        dueDate: '2026-08-15',
-        userId,
-        userName,
-      });
+      const recRepo = new AccountReceivableRepository();
+      const existingRecs = await recRepo.findByContractId(contract.id);
 
-      if (contract.status === ContractStatus.DRAFT && receivables) {
+      if (contract.status === ContractStatus.DRAFT && existingRecs.length === 0) {
         return { passed: true, message: 'Contrato em rascunho (DRAFT) verificado. Cobrança automática bloqueada.', details: contract };
       }
-      return { passed: false, message: 'Falha no teste A' };
+      return { passed: false, message: 'Falha no teste A: cobranças encontradas para contrato DRAFT' };
     });
 
     // B. AWAITING_SIGNATURE não gera AccountReceivable automática
@@ -1261,7 +1252,7 @@ export class FinanceTestRunner {
 
       const recs = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: contract.id,
         contractId: contract.id,
         driverId: contract.driverId,
@@ -1391,7 +1382,7 @@ export class FinanceTestRunner {
     await test('C1', 'C1. Cancelamento normal de AccountReceivable pendente', async () => {
       const rec = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-cancel-normal',
         categoryId: defaultCategory,
         description: 'Título para Cancelamento Normal',
@@ -1420,7 +1411,7 @@ export class FinanceTestRunner {
     await test('C2', 'C2. Bloqueio de cancelamento com recebimentos efetuados', async () => {
       const rec = await FinanceEngine.createReceivable({
         companyId,
-        originType: OriginType.CONTRACT_RENT,
+        originType: OriginType.ADMINISTRATIVE,
         originId: 'cnt-cancel-part-paid',
         categoryId: defaultCategory,
         description: 'Título Pago Parcialmente',
