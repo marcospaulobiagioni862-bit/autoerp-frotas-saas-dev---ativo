@@ -650,9 +650,8 @@ export function registerDriverRoutes(app: Express): void {
       res.status(400).json({ error: 'Invalid driver health request' });
       return;
     }
-    const allowed = ['bloodType','allergies','relevantConditions','continuousMedications','controlledMedications','emergencyContactName','emergencyContactRelationship','emergencyContactPhone','emergencyNotes','lgpdConsentAt','lgpdConsentVersion'] as const;
     const health: Record<string, string> = {};
-    for (const key of allowed) {
+    for (const key of ALLOWED_HEALTH_KEYS) {
       const value = (raw as Record<string, unknown>)[key];
       if (value !== undefined) {
         if (typeof value !== 'string') {
@@ -682,12 +681,8 @@ export function registerDriverRoutes(app: Express): void {
         }
 
         const now = new Date().toISOString();
-        const consentAt = isConsentingNow
-          ? (typeof (raw as Record<string, unknown>).lgpdConsentAt === 'string' && (raw as Record<string, unknown>).lgpdConsentAt ? (raw as Record<string, unknown>).lgpdConsentAt as string : now)
-          : existing?.lgpdConsentAt;
-        const consentVersion = isConsentingNow
-          ? (typeof (raw as Record<string, unknown>).lgpdConsentVersion === 'string' && (raw as Record<string, unknown>).lgpdConsentVersion ? (raw as Record<string, unknown>).lgpdConsentVersion as string : LGPD_HEALTH_CONSENT_VERSION)
-          : existing?.lgpdConsentVersion;
+        const consentAt = isConsentingNow ? now : existing?.lgpdConsentAt;
+        const consentVersion = isConsentingNow ? LGPD_HEALTH_CONSENT_VERSION : existing?.lgpdConsentVersion;
 
         const profile = await tx.getDriverHealthRepo().upsert({
           id: existing?.id || randomUUID(),

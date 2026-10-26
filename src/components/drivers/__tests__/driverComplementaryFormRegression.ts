@@ -429,12 +429,15 @@ try {
   console.log('✓ Internal PUT /api/drivers/:id/health blocked without LGPD consent with HTTP 400 LGPD_CONSENT_REQUIRED.');
 
   // 5d. Rota Interna PUT /api/drivers/:id/health COM consentimento => 200 OK e grava consentimento
-  console.log('5d. PUT /api/drivers/:id/health with health data WITH explicit LGPD consent...');
+  // Invariante de Segurança: Cliente tenta forjar data e versão do consentimento -> Servidor é autoritativo (now e 1.0)
+  console.log('5d. PUT /api/drivers/:id/health with health data WITH explicit LGPD consent and anti-tamper check...');
   const resInternalPutWithConsent = await request(`/api/drivers/${driverWithoutHealthId}/health`, {
     method: 'PUT',
     body: JSON.stringify({
       health: {
         controlledMedications: 'Clonazepam 2mg',
+        lgpdConsentAt: '2020-01-01T00:00:00.000Z',
+        lgpdConsentVersion: 'v0.0-inexistente',
       },
       lgpdConsent: true,
     }),
@@ -444,8 +447,9 @@ try {
   assert.ok(updatedHealthProfile, 'Health profile must be recorded in database');
   assert.equal(updatedHealthProfile.controlledMedications, 'Clonazepam 2mg');
   assert.ok(updatedHealthProfile.lgpdConsentAt, 'lgpdConsentAt must be populated in database');
-  assert.equal(updatedHealthProfile.lgpdConsentVersion, '1.0', 'lgpdConsentVersion must be 1.0');
-  console.log('✓ Internal PUT /api/drivers/:id/health persisted health data and recorded LGPD consent in database.');
+  assert.notEqual(updatedHealthProfile.lgpdConsentAt, '2020-01-01T00:00:00.000Z', 'Must reject client-forged consent date');
+  assert.equal(updatedHealthProfile.lgpdConsentVersion, '1.0', 'lgpdConsentVersion must strictly be authoritative 1.0, rejecting forged client version');
+  console.log('✓ Internal PUT /api/drivers/:id/health persisted health data and enforced authoritative server consent date and version 1.0.');
 
   // 5e. Rota Pública POST /api/public/driver-form/:token com dados de saúde SEM consentimento => 400 LGPD_CONSENT_REQUIRED
   console.log('5e. POST /api/public/driver-form/:token with health data without LGPD consent...');
