@@ -29,13 +29,19 @@ function requirePrincipal(req: Request, res: Response): AuthenticatedPrincipal |
   return item;
 }
 
-function actorFrom(item: AuthenticatedPrincipal): AdminUserActor {
+function actorFrom(item: AuthenticatedPrincipal, req?: Request): AdminUserActor {
+  const forwarded = req?.headers?.['x-forwarded-for'];
+  const rawIp = typeof forwarded === 'string'
+    ? forwarded.split(',')[0].trim()
+    : req?.ip || req?.socket?.remoteAddress || undefined;
+
   return {
     companyId: item.companyId,
     userId: item.userId,
     name: item.name,
     role: item.role,
     permissions: Array.isArray(item.permissions) ? item.permissions : [],
+    ipAddress: rawIp ? String(rawIp) : undefined,
   };
 }
 
@@ -126,7 +132,7 @@ export function registerAdminUserRoutes(app: Express): void {
         return;
       }
       res.status(201).json({
-        item: await AdminUserAuthority.provisionUser(actorFrom(p), {
+        item: await AdminUserAuthority.provisionUser(actorFrom(p, req), {
           name,
           email,
           role,
@@ -146,7 +152,7 @@ export function registerAdminUserRoutes(app: Express): void {
     try {
       const { name, email, phone, role, password } = req.body || {};
       res.json({
-        item: await AdminUserAuthority.updateUser(actorFrom(p), req.params.id, {
+        item: await AdminUserAuthority.updateUser(actorFrom(p, req), req.params.id, {
           name: typeof name === 'string' ? name : undefined,
           email: typeof email === 'string' ? email : undefined,
           phone: typeof phone === 'string' ? phone : undefined,

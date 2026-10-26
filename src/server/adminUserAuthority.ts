@@ -6,6 +6,7 @@ import { userCompanyMemberships, userCredentials } from '../db/authSchema';
 import { AuditAction } from '../types/enums';
 import { getDefaultPermissionsForRole } from './rolePresets';
 import { hashPassword } from './password';
+import { recordCredentialAuditEvent } from './credentialAudit';
 
 export interface AdminUserActor {
   companyId: string;
@@ -13,6 +14,7 @@ export interface AdminUserActor {
   name: string;
   role: string;
   permissions?: string[];
+  ipAddress?: string;
 }
 
 export interface AdminUserRecord {
@@ -567,6 +569,18 @@ export class AdminUserAuthority {
               passwordHash,
               passwordUpdatedAt: now,
             });
+
+            await recordCredentialAuditEvent(tx, {
+              companyId: actor.companyId,
+              actorUserId: actor.userId,
+              actorUserName: actor.name,
+              targetUserId: userRecord.id,
+              action: 'CREATE',
+              event: 'CREDENTIAL_CREATE_ADMIN',
+              origin: 'ADMIN_CONSOLE',
+              ipAddress: actor.ipAddress,
+              timestamp: now,
+            });
           }
         }
       }
@@ -737,6 +751,18 @@ export class AdminUserAuthority {
                 passwordUpdatedAt: now,
               },
             });
+
+          await recordCredentialAuditEvent(tx, {
+            companyId: actor.companyId,
+            actorUserId: actor.userId,
+            actorUserName: actor.name,
+            targetUserId,
+            action: 'UPDATE',
+            event: 'PASSWORD_RESET_ADMIN',
+            origin: 'ADMIN_CONSOLE',
+            ipAddress: actor.ipAddress,
+            timestamp: now,
+          });
         }
       }
 

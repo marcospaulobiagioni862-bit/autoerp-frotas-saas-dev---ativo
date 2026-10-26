@@ -20,6 +20,7 @@ import { userCompanyMemberships } from './src/db/authSchema';
 import { PostgresAuthCredentialRepository } from './src/db/repositories/postgresAuthRepository';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { verifyPassword } from './src/server/password';
+import { recordCredentialAuditEvent } from './src/server/credentialAudit';
 import { createServer as createViteServer } from 'vite';
 import {
   authenticateBearerPrincipal,
@@ -295,6 +296,12 @@ async function startServer() {
         ? req.headers['x-autoerp-bootstrap-token']
         : undefined;
 
+      const forwarded = req.headers['x-forwarded-for'];
+      const rawIp = typeof forwarded === 'string'
+        ? forwarded.split(',')[0].trim()
+        : req.ip || req.socket?.remoteAddress || null;
+      const clientIp = rawIp ? String(rawIp) : null;
+
       const provisioned = await executeAuthorizedBootstrap(
         {
           companyId: req.body?.companyId,
@@ -380,6 +387,18 @@ async function startServer() {
               companyId: prepared.companyId,
               userId: prepared.userId,
               passwordHash: prepared.passwordHash,
+            });
+
+            await recordCredentialAuditEvent(tx, {
+              companyId: prepared.companyId,
+              actorUserId: prepared.userId,
+              actorUserName: 'System Bootstrap',
+              targetUserId: prepared.userId,
+              action: 'CREATE',
+              event: 'BOOTSTRAP_FIRST_ADMIN_CREDENTIAL',
+              origin: 'SYSTEM_BOOTSTRAP',
+              ipAddress: clientIp,
+              timestamp: now,
             });
 
             return {

@@ -1,10 +1,17 @@
 import { eq } from 'drizzle-orm';
 import { userCredentials, UserCredentialRow } from '../authSchema';
+import { recordCredentialAuditEvent } from '../../server/credentialAudit';
 
 export interface SetPasswordCredentialInput {
   companyId?: string;
   userId: string;
   passwordHash: string;
+  auditActor?: {
+    userId: string;
+    userName: string;
+    origin?: string;
+    ipAddress?: string;
+  };
 }
 
 export class PostgresAuthCredentialRepository {
@@ -48,6 +55,20 @@ export class PostgresAuthCredentialRepository {
     if (!credential) {
       throw new Error('AUTH_CREDENTIAL_WRITE_FAILED');
     }
+
+    if (input.auditActor && input.companyId) {
+      await recordCredentialAuditEvent(this.tx, {
+        companyId: input.companyId,
+        actorUserId: input.auditActor.userId,
+        actorUserName: input.auditActor.userName,
+        targetUserId: input.userId,
+        action: 'UPDATE',
+        event: 'PASSWORD_RESET_ADMIN',
+        origin: input.auditActor.origin || 'AUTH_REPOSITORY',
+        ipAddress: input.auditActor.ipAddress,
+      });
+    }
+
     return credential;
   }
 }

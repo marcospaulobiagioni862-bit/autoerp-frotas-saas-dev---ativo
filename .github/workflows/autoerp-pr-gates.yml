@@ -950,6 +950,7 @@ jobs:
           npx tsx src/server/__tests__/tenantScopedBaseRepositoryIntegration.ts
           npx tsx src/server/__tests__/detailAuthorityIntegration.ts
           npx tsx src/server/__tests__/operationalAuthorityIntegration.ts
+          npx tsx src/server/__tests__/passwordAuditLogRegression.test.ts
       - name: Evidence and attachment regressions
         if: matrix.suite == 'storage'
         run: |

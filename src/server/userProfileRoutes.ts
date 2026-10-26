@@ -5,6 +5,7 @@ import { users } from '../db/schema';
 import { userCredentials } from '../db/authSchema';
 import type { AuthenticatedPrincipal } from './auth';
 import { hashPassword, verifyPassword } from './password';
+import { recordCredentialAuditEvent } from './credentialAudit';
 
 function principal(req: Request): AuthenticatedPrincipal | undefined {
   return (req as Request & { principal?: AuthenticatedPrincipal }).principal;
@@ -188,13 +189,33 @@ export function registerUserProfileRoutes(app: Express): void {
       const newHash = await hashPassword(newPassword.trim());
       const now = new Date();
 
-      await db
-        .update(userCredentials)
-        .set({
-          passwordHash: newHash,
-          passwordUpdatedAt: now,
-        })
-        .where(eq(userCredentials.userId, p.userId));
+      const forwarded = req.headers['x-forwarded-for'];
+      const rawIp = typeof forwarded === 'string'
+        ? forwarded.split(',')[0].trim()
+        : req.ip || req.socket?.remoteAddress || null;
+      const ipAddress = rawIp ? String(rawIp) : null;
+
+      await db.transaction(async (tx) => {
+        await tx
+          .update(userCredentials)
+          .set({
+            passwordHash: newHash,
+            passwordUpdatedAt: now,
+          })
+          .where(eq(userCredentials.userId, p.userId));
+
+        await recordCredentialAuditEvent(tx, {
+          companyId: p.companyId,
+          actorUserId: p.userId,
+          actorUserName: p.name,
+          targetUserId: p.userId,
+          action: 'UPDATE',
+          event: 'PASSWORD_CHANGE_SELF',
+          origin: 'SELF_SERVICE_PROFILE',
+          ipAddress,
+          timestamp: now,
+        });
+      });
 
       res.json({ success: true, message: 'Senha alterada com sucesso' });
     } catch (error) {

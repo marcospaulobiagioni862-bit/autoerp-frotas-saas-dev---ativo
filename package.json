@@ -38,6 +38,7 @@
     "test:user-permissions-fail-closed": "tsx src/server/__tests__/userPermissionsFailClosedRegression.ts",
     "test:user-memberships": "tsx src/server/__tests__/userCompanyMembershipsRegression.ts",
     "test:admin-user-create": "tsx src/server/__tests__/adminUserCreateRegression.ts",
+    "test:password-audit-log": "tsx src/server/__tests__/passwordAuditLogRegression.test.ts",
     "test:user-profile-edit": "tsx src/server/__tests__/userProfileAndEditRegression.ts",
     "test:user-avatar-menu": "tsx src/components/layout/__tests__/userAvatarMenuRegression.tsx",
     "test:attachment-multi-provider": "tsx src/server/__tests__/attachmentMultiProviderRegression.ts",

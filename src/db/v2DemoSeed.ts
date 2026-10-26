@@ -25,6 +25,7 @@ import {
 } from './schema';
 import { userCompanyMemberships, userCredentials } from './authSchema';
 import { hashPassword } from '../server/password';
+import { recordCredentialAuditEvent } from '../server/credentialAudit';
 
 const DEMO_TARGETS = new Set(['development', 'test', 'preview']);
 const FORBIDDEN_BRANCHES = new Set(['main', 'staging-app']);
@@ -377,6 +378,18 @@ export async function runV2DemoSeed() {
           passwordUpdatedAt: cred.passwordUpdatedAt,
         })
         .where(eq(userCredentials.userId, cred.userId));
+
+      await recordCredentialAuditEvent(tx, {
+        companyId,
+        actorUserId: createdById,
+        actorUserName: 'Demo Seed System',
+        targetUserId: cred.userId,
+        action: 'UPDATE',
+        event: 'SEED_DEMO_CREDENTIAL',
+        origin: 'V2_DEMO_SEED',
+        ipAddress: '127.0.0.1',
+        timestamp: cred.passwordUpdatedAt,
+      });
     }
 
     const existingDemoContracts = await tx
