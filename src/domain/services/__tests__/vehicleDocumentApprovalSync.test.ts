@@ -138,6 +138,32 @@ export class VehicleDocumentApprovalSyncTestRunner {
       }
     });
 
+    // T07 (PH-127): Situação "Em dia" ou "Regular" com data de vencimento no passado deve ser INVÁLIDA
+    await test('T07', 'CRLV com situação "Em dia" ou "Regular" mas data vencida no passado retorna falso', async () => {
+      const isEmDiaExpired = FleetComplianceService.isCrlvSituationValid('Em dia', pastExpirationDate);
+      if (isEmDiaExpired) {
+        throw new Error('CRLV com situação "Em dia" e vencimento no passado não pode ser válido.');
+      }
+
+      const isRegularExpired = FleetComplianceService.isCrlvSituationValid('Regular', pastExpirationDate);
+      if (isRegularExpired) {
+        throw new Error('CRLV com situação "Regular" e vencimento no passado não pode ser válido.');
+      }
+
+      const isValidLiteralExpired = FleetComplianceService.isCrlvSituationValid('VALID', pastExpirationDate);
+      if (isValidLiteralExpired) {
+        throw new Error('CRLV com situação "VALID" e vencimento no passado não pode ser válido.');
+      }
+    });
+
+    // T08 (PH-127): Situação "Vencido" com data de vencimento no futuro deve ser INVÁLIDA
+    await test('T08', 'CRLV com situação "Vencido" mesmo com data de vencimento no futuro retorna falso', async () => {
+      const isVencidoFuture = FleetComplianceService.isCrlvSituationValid('Vencido', expirationDate);
+      if (isVencidoFuture) {
+        throw new Error('CRLV com situação textual "Vencido" não pode ser válido mesmo com data futura.');
+      }
+    });
+
     const passed = results.filter((r) => r.passed).length;
     const failed = results.filter((r) => !r.passed).length;
 
