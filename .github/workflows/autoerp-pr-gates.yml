@@ -765,6 +765,27 @@ jobs:
       - name: Contract PDF visual overlays regression
         run: npm run test:contract-pdf-overlays
 
+      # AUTOERP-40: cinco suites que existiam, passavam e nunca eram executadas —
+      # nenhum script em package.json e nenhum step aqui. Ficam no validate-fast
+      # porque nenhuma toca banco (conferido: zero import de db/drizzle/UnitOfWork;
+      # as que usam fixture leem persistence/seed/seedData em memoria). Cada uma
+      # teve a mutacao que deveria pegar aplicada e confirmada VERMELHA antes de
+      # ser pendurada aqui — ver o comentario de prova no card.
+      - name: Civil date, CTB and CNH recalculation regression
+        run: npm run test:civil-date
+
+      - name: Vehicle document intake AI review rules regression
+        run: npm run test:vehicle-document-intake-ai-review-rules
+
+      - name: Vehicle document approval sync regression
+        run: npm run test:vehicle-document-approval-sync
+
+      - name: CRLV full pipeline integration
+        run: npm run test:crlv-full-pipeline
+
+      - name: Vehicle CRLV no human review required regression
+        run: npm run test:vehicle-crlv-no-human-review
+
       - name: API client contract regression
         run: npm run test:api-clients
 
