@@ -37,12 +37,34 @@ function clientIp(req: Request): string {
   return req.ip || req.socket.remoteAddress || '127.0.0.1';
 }
 
+const ALLOWED_TOKEN_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
+
+function hasDriverTokenPermission(principal: AuthenticatedPrincipal): boolean {
+  if (!principal.userId || !principal.companyId) return false;
+  const role = String(principal.role || '').toUpperCase();
+  if (role === 'ADMIN') return true;
+  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
+  if (
+    permissions.includes('*') ||
+    permissions.includes('EDIT_DRIVER') ||
+    permissions.includes('CREATE_DRIVER') ||
+    permissions.includes('MANAGE_WHATSAPP')
+  ) {
+    return true;
+  }
+  return ALLOWED_TOKEN_ROLES.has(role);
+}
+
 export function registerDriverFormTokenRoutes(app: Express): void {
   // 1. Gera link externo de 24h para envio via WhatsApp (wa.me)
   app.post('/api/drivers/:id/form-token', async (req: Request, res: Response) => {
     const principal = principalFrom(req);
     if (!principal) {
       res.status(401).json({ error: 'Unauthorized: Authentication required' });
+      return;
+    }
+    if (!hasDriverTokenPermission(principal)) {
+      res.status(403).json({ error: 'Forbidden' });
       return;
     }
 

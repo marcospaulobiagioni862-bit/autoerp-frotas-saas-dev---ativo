@@ -23,6 +23,28 @@ function requirePrincipal(req: Request, res: Response): AuthenticatedPrincipal |
   return actor;
 }
 
+const OVERDUE_WRITE_ROLES = new Set(['ADMIN', 'FINANCIAL_MANAGER', 'MANAGER']);
+const OVERDUE_WRITE_PERMS = new Set([
+  '*',
+  'FINANCIAL_OVERDUE_PROCESS',
+  'FINANCIAL_LATE_CHARGE_RULE_MANAGE',
+  'FINANCE_WRITE',
+]);
+
+function requireOverdueWritePrincipal(req: Request, res: Response): AuthenticatedPrincipal | null {
+  const actor = requirePrincipal(req, res);
+  if (!actor) return null;
+  const role = String(actor.role || '').toUpperCase();
+  if (role === 'ADMIN') return actor;
+  const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
+  const hasPerm = permissions.some((p) => OVERDUE_WRITE_PERMS.has(p));
+  if (!hasPerm && !OVERDUE_WRITE_ROLES.has(role)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return null;
+  }
+  return actor;
+}
+
 function actorFrom(principalItem: AuthenticatedPrincipal): OverdueActor {
   return {
     companyId: principalItem.companyId,
@@ -126,7 +148,7 @@ export function registerFinanceOverdueRoutes(app: Express): void {
   });
 
   app.put('/api/finance/late-charge-rules/:type', async (req, res) => {
-    const principalItem = requirePrincipal(req, res);
+    const principalItem = requireOverdueWritePrincipal(req, res);
     if (!principalItem) return;
     try {
       const item = await FinanceOverdueAuthority.upsertRule(
@@ -141,7 +163,7 @@ export function registerFinanceOverdueRoutes(app: Express): void {
   });
 
   app.post('/api/finance/overdue/process', async (req, res) => {
-    const principalItem = requirePrincipal(req, res);
+    const principalItem = requireOverdueWritePrincipal(req, res);
     if (!principalItem) return;
     try {
       // The parser intentionally accepts only type + processingDate. companyId,

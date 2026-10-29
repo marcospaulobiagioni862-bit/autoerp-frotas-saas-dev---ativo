@@ -21,6 +21,29 @@ function requirePrincipal(req: Request, res: Response): AuthenticatedPrincipal |
   return actor;
 }
 
+const RECONCILIATION_WRITE_ROLES = new Set(['ADMIN', 'FINANCIAL_MANAGER', 'MANAGER']);
+const RECONCILIATION_WRITE_PERMS = new Set([
+  '*',
+  'BANK_RECONCILIATION_MATCH',
+  'BANK_RECONCILIATION_UNMATCH',
+  'BANK_RECONCILIATION_IGNORE',
+  'FINANCE_WRITE',
+]);
+
+function requireReconciliationWritePrincipal(req: Request, res: Response): AuthenticatedPrincipal | null {
+  const actor = requirePrincipal(req, res);
+  if (!actor) return null;
+  const role = String(actor.role || '').toUpperCase();
+  if (role === 'ADMIN') return actor;
+  const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
+  const hasPerm = permissions.some((p) => RECONCILIATION_WRITE_PERMS.has(p));
+  if (!hasPerm && !RECONCILIATION_WRITE_ROLES.has(role)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return null;
+  }
+  return actor;
+}
+
 function actorFrom(item: AuthenticatedPrincipal): ReconciliationActor {
   return { companyId: item.companyId, userId: item.userId, name: item.name };
 }
@@ -114,7 +137,7 @@ function sendError(res: Response, error: unknown): void {
 
 export function registerBankReconciliationRoutes(app: Express): void {
   app.post('/api/finance/bank-reconciliation/import', async (req, res) => {
-    const principalItem = requirePrincipal(req, res); if (!principalItem) return;
+    const principalItem = requireReconciliationWritePrincipal(req, res); if (!principalItem) return;
     try {
       const input = parseBankStatementImportRequest(req.body);
       res.status(201).json(await BankReconciliationAuthority.importEntries(actorFrom(principalItem), input));
@@ -141,7 +164,7 @@ export function registerBankReconciliationRoutes(app: Express): void {
   });
 
   app.post('/api/finance/bank-reconciliation/entries/:id/match', async (req, res) => {
-    const principalItem = requirePrincipal(req, res); if (!principalItem) return;
+    const principalItem = requireReconciliationWritePrincipal(req, res); if (!principalItem) return;
     try {
       res.json({ item: await BankReconciliationAuthority.matchEntry(
         actorFrom(principalItem), req.params.id, parseMatchRequest(req.body),
@@ -150,7 +173,7 @@ export function registerBankReconciliationRoutes(app: Express): void {
   });
 
   app.post('/api/finance/bank-reconciliation/entries/:id/unmatch', async (req, res) => {
-    const principalItem = requirePrincipal(req, res); if (!principalItem) return;
+    const principalItem = requireReconciliationWritePrincipal(req, res); if (!principalItem) return;
     try {
       res.json({ item: await BankReconciliationAuthority.unmatchEntry(
         actorFrom(principalItem), req.params.id, optionalReason(req.body),
@@ -159,7 +182,7 @@ export function registerBankReconciliationRoutes(app: Express): void {
   });
 
   app.post('/api/finance/bank-reconciliation/entries/:id/ignore', async (req, res) => {
-    const principalItem = requirePrincipal(req, res); if (!principalItem) return;
+    const principalItem = requireReconciliationWritePrincipal(req, res); if (!principalItem) return;
     try {
       res.json({ item: await BankReconciliationAuthority.ignoreEntry(
         actorFrom(principalItem), req.params.id, optionalReason(req.body),

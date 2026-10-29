@@ -36,6 +36,7 @@
     "verify:contract-lifecycle-real": "tsx src/server/__tests__/verifyContractLifecycleRealMassa.ts",
     "verify:user-permissions-fail-closed": "tsx src/server/__tests__/userPermissionsFailClosedRegression.ts",
     "test:user-permissions-fail-closed": "tsx src/server/__tests__/userPermissionsFailClosedRegression.ts",
+    "test:mutation-auth": "tsx src/server/__tests__/mutationAuthorizationFailClosedRegression.ts",
     "test:user-memberships": "tsx src/server/__tests__/userCompanyMembershipsRegression.ts",
     "test:admin-user-create": "tsx src/server/__tests__/adminUserCreateRegression.ts",
     "test:password-audit-log": "tsx src/server/__tests__/passwordAuditLogRegression.test.ts",

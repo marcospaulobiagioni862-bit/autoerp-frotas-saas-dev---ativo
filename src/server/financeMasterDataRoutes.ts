@@ -22,6 +22,23 @@ function requirePrincipal(req: Request, res: Response): AuthenticatedPrincipal |
   return item;
 }
 
+const MASTER_DATA_WRITE_ROLES = new Set(['ADMIN', 'FINANCIAL_MANAGER', 'MANAGER']);
+const MASTER_DATA_WRITE_PERMS = new Set(['*', 'FINANCIAL_MASTER_DATA_MANAGE', 'FINANCE_WRITE']);
+
+function requireMasterDataWritePrincipal(req: Request, res: Response): AuthenticatedPrincipal | null {
+  const item = requirePrincipal(req, res);
+  if (!item) return null;
+  const role = String(item.role || '').toUpperCase();
+  if (role === 'ADMIN') return item;
+  const permissions = Array.isArray(item.permissions) ? item.permissions : [];
+  const hasPerm = permissions.some((p) => MASTER_DATA_WRITE_PERMS.has(p));
+  if (!hasPerm && !MASTER_DATA_WRITE_ROLES.has(role)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return null;
+  }
+  return item;
+}
+
 function actorFrom(item: AuthenticatedPrincipal): FinanceMasterDataActor {
   return { companyId: item.companyId, userId: item.userId, name: item.name };
 }
@@ -126,7 +143,7 @@ export function registerFinanceMasterDataRoutes(app: Express): void {
   });
 
   app.post('/api/finance/master-data/accounts', async (req, res) => {
-    const p = requirePrincipal(req, res); if (!p) return;
+    const p = requireMasterDataWritePrincipal(req, res); if (!p) return;
     try {
       const body = objectBody(req.body);
       assertOnlyKeys(body, ['name', 'type', 'institution', 'accountNumber', 'agency', 'pixKey', 'initialBalance', 'status']);
@@ -141,7 +158,7 @@ export function registerFinanceMasterDataRoutes(app: Express): void {
   });
 
   app.patch('/api/finance/master-data/accounts/:id', async (req, res) => {
-    const p = requirePrincipal(req, res); if (!p) return;
+    const p = requireMasterDataWritePrincipal(req, res); if (!p) return;
     try {
       const body = objectBody(req.body);
       assertOnlyKeys(body, ['name', 'type', 'institution', 'accountNumber', 'agency', 'pixKey', 'status']);
@@ -157,7 +174,7 @@ export function registerFinanceMasterDataRoutes(app: Express): void {
   });
 
   app.post('/api/finance/master-data/payment-methods', async (req, res) => {
-    const p = requirePrincipal(req, res); if (!p) return;
+    const p = requireMasterDataWritePrincipal(req, res); if (!p) return;
     try {
       const body = objectBody(req.body);
       assertOnlyKeys(body, ['name', 'type', 'active']);
@@ -168,7 +185,7 @@ export function registerFinanceMasterDataRoutes(app: Express): void {
   });
 
   app.patch('/api/finance/master-data/payment-methods/:id', async (req, res) => {
-    const p = requirePrincipal(req, res); if (!p) return;
+    const p = requireMasterDataWritePrincipal(req, res); if (!p) return;
     try {
       const body = objectBody(req.body);
       assertOnlyKeys(body, ['name', 'type', 'active']);
@@ -182,7 +199,7 @@ export function registerFinanceMasterDataRoutes(app: Express): void {
   });
 
   app.post('/api/finance/master-data/categories', async (req, res) => {
-    const p = requirePrincipal(req, res); if (!p) return;
+    const p = requireMasterDataWritePrincipal(req, res); if (!p) return;
     try {
       const body = objectBody(req.body);
       assertOnlyKeys(body, ['name', 'type', 'parentId', 'active', 'dreGroup']);
@@ -194,14 +211,14 @@ export function registerFinanceMasterDataRoutes(app: Express): void {
   });
 
   app.post('/api/finance/master-data/categories/seed-defaults', async (req, res) => {
-    const p = requirePrincipal(req, res); if (!p) return;
+    const p = requireMasterDataWritePrincipal(req, res); if (!p) return;
     try {
       res.status(200).json(await FinanceMasterDataAuthority.seedDefaultCategories(actorFrom(p)));
     } catch (error) { sendError(res, error); }
   });
 
   app.patch('/api/finance/master-data/categories/:id', async (req, res) => {
-    const p = requirePrincipal(req, res); if (!p) return;
+    const p = requireMasterDataWritePrincipal(req, res); if (!p) return;
     try {
       const body = objectBody(req.body);
       assertOnlyKeys(body, ['name', 'type', 'parentId', 'active', 'dreGroup']);
