@@ -240,7 +240,50 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
   app.get('/api/attachments',async(req,res)=>{
     const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;
     const entityType=typeof req.query.entityType==='string'?req.query.entityType.trim():'',entityId=typeof req.query.entityId==='string'?req.query.entityId.trim():'';
-    try{const items=await UnitOfWork.run(principal.companyId,async tx=>{if(entityType||entityId){if(!entityType||!entityId)throw new AttachmentValidationError();await validateEntity(tx,principal,entityType,entityId,false);return await tx.getAttachmentRepo().findByEntity(principal.companyId,entityType,entityId);}const all=await tx.getAttachmentRepo().findAllByCompany(principal.companyId);return all.filter((item:FileAttachment)=>item.entityType!=='DriverDocumentIntake'&&item.entityType!=='VehicleDocumentIntake');});res.json({items:await projectStorageAvailability(storage,principal.companyId,items)});}catch(error){sendAttachmentError(res,error);}
+    const hasLimit = req.query.limit !== undefined;
+    const hasOffset = req.query.offset !== undefined;
+    const rawLimit = hasLimit ? Number(req.query.limit) : NaN;
+    const rawOffset = hasOffset ? Number(req.query.offset) : 0;
+    const isPaged = Number.isInteger(rawLimit) && rawLimit > 0;
+    const limit = isPaged ? Math.min(rawLimit, 100) : 0;
+    const offset = Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+
+    try{
+      if(isPaged){
+        const { items, total } = await UnitOfWork.run(principal.companyId,async tx=>{
+          if(entityType||entityId){
+            if(!entityType||!entityId)throw new AttachmentValidationError();
+            await validateEntity(tx,principal,entityType,entityId,false);
+          }
+          const repo = tx.getAttachmentRepo();
+          if (typeof repo.findAllPaged === 'function') {
+            return await repo.findAllPaged(principal.companyId, {
+              limit,
+              offset,
+              entityType: entityType || undefined,
+              entityId: entityId || undefined,
+            });
+          }
+          const fallback = entityType && entityId
+            ? await repo.findByEntity(principal.companyId, entityType, entityId)
+            : (await repo.findAllByCompany(principal.companyId)).filter((item:FileAttachment)=>item.entityType!=='DriverDocumentIntake'&&item.entityType!=='VehicleDocumentIntake');
+          return { items: fallback.slice(offset, offset + limit), total: fallback.length };
+        });
+        const projected = await projectStorageAvailability(storage,principal.companyId,items);
+        return res.json({ items: projected, total, limit, offset });
+      }
+
+      const items=await UnitOfWork.run(principal.companyId,async tx=>{
+        if(entityType||entityId){
+          if(!entityType||!entityId)throw new AttachmentValidationError();
+          await validateEntity(tx,principal,entityType,entityId,false);
+          return await tx.getAttachmentRepo().findByEntity(principal.companyId,entityType,entityId);
+        }
+        const all=await tx.getAttachmentRepo().findAllByCompany(principal.companyId);
+        return all.filter((item:FileAttachment)=>item.entityType!=='DriverDocumentIntake'&&item.entityType!=='VehicleDocumentIntake');
+      });
+      res.json({items:await projectStorageAvailability(storage,principal.companyId,items)});
+    }catch(error){sendAttachmentError(res,error);}
   });
   app.get('/api/attachments/gallery',async(req,res)=>{
     const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;

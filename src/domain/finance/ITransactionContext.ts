@@ -97,6 +97,10 @@ export interface ITransactionAuditLogRepository {
 export interface ITransactionAttachmentRepository {
   findByIdForCompany(companyId: string, id: string): Promise<FileAttachment | null>;
   findAllByCompany(companyId: string): Promise<FileAttachment[]>;
+  findAllPaged?(
+    companyId: string,
+    options: { limit: number; offset: number; entityType?: string; entityId?: string }
+  ): Promise<{ items: FileAttachment[]; total: number }>;
   findByEntity(companyId: string, entityType: string, entityId: string): Promise<FileAttachment[]>;
   findEntityGallery(companyId: string, entityType: 'Vehicle' | 'Driver', entityId: string): Promise<FileAttachment[]>;
   create(item: FileAttachment): Promise<FileAttachment>;

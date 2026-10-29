@@ -58,6 +58,52 @@ export class PostgresAttachmentRepository implements ITransactionAttachmentRepos
     return rowsOf(result).map((row) => this.map(row));
   }
 
+  async findAllPaged(
+    companyId: string,
+    options: { limit: number; offset: number; entityType?: string; entityId?: string }
+  ): Promise<{ items: FileAttachment[]; total: number }> {
+    const { limit, offset, entityType, entityId } = options;
+    if (entityType && entityId) {
+      const countRes = await this.tx.execute(sql`
+        SELECT COUNT(*)::int as count FROM file_attachments
+        WHERE company_id = ${companyId}
+          AND entity_type = ${entityType}
+          AND entity_id = ${entityId}
+      `);
+      const total = Number(rowsOf(countRes)[0]?.count ?? 0);
+      const itemsRes = await this.tx.execute(sql`
+        SELECT * FROM file_attachments
+        WHERE company_id = ${companyId}
+          AND entity_type = ${entityType}
+          AND entity_id = ${entityId}
+        ORDER BY created_at DESC, id DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `);
+      return {
+        items: rowsOf(itemsRes).map((row) => this.map(row)),
+        total,
+      };
+    }
+
+    const countRes = await this.tx.execute(sql`
+      SELECT COUNT(*)::int as count FROM file_attachments
+      WHERE company_id = ${companyId}
+        AND entity_type NOT IN ('DriverDocumentIntake', 'VehicleDocumentIntake')
+    `);
+    const total = Number(rowsOf(countRes)[0]?.count ?? 0);
+    const itemsRes = await this.tx.execute(sql`
+      SELECT * FROM file_attachments
+      WHERE company_id = ${companyId}
+        AND entity_type NOT IN ('DriverDocumentIntake', 'VehicleDocumentIntake')
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+    return {
+      items: rowsOf(itemsRes).map((row) => this.map(row)),
+      total,
+    };
+  }
+
   async findByEntity(companyId: string, entityType: string, entityId: string): Promise<FileAttachment[]> {
     const result = await this.tx.execute(sql`
       SELECT * FROM file_attachments

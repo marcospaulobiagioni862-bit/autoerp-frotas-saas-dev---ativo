@@ -50,6 +50,22 @@ export class AttachmentClientTestRunner {
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         url = String(input);
         credentials = String(init?.credentials);
+        return new Response(JSON.stringify({ items: [attachment], total: 42, limit: 10, offset: 20 }), { status: 200 });
+      }) as typeof fetch;
+      const res = await AttachmentClient.listPaged({ entityType: 'Vehicle', entityId: 'vehicle 1', limit: 10, offset: 20 });
+      assert(res.items.length === 1, 'LIST_PAGED items payload');
+      assert(res.total === 42, 'LIST_PAGED total payload');
+      assert(res.limit === 10 && res.offset === 20, 'LIST_PAGED pagination metadata');
+      assert(credentials === 'include', 'LIST_PAGED credentials');
+      assert(url.includes('limit=10') && url.includes('offset=20'), 'LIST_PAGED query parameters');
+    });
+
+    tests.push(async () => {
+      let credentials = '';
+      let url = '';
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        url = String(input);
+        credentials = String(init?.credentials);
         return new Response(JSON.stringify({ items: [attachment] }), { status: 200 });
       }) as typeof fetch;
       const items = await AttachmentClient.listEntityGallery('Vehicle', 'vehicle 1');

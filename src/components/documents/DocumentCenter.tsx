@@ -131,6 +131,7 @@ export function DocumentCenter({
 
   // Data states
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [serverTotal, setServerTotal] = useState<number>(0);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -154,8 +155,13 @@ export function DocumentCenter({
     try {
       // Technical AI status remains internal to the ERP and is intentionally not rendered in this user-facing library.
       void DocumentAiClient.attachmentStatuses().catch(() => undefined);
+
+      // Justificativa arquitetural (PH-060 / AUTOERP-85):
+      // As listas de entidades relacionais (Veículos, Motoristas, Contratos, Ordens, Multas, Seguros e Rastreadores)
+      // são mantidas como catálogos leves de metadados para popular os selects de filtro das 3 óticas e
+      // resolver os rótulos de contexto (placa, modelo, motorista) dos anexos paginados.
       const [
-        attachmentsResult,
+        attachmentsPagedResult,
         vehiclesResult,
         driversResult,
         contractsResult,
@@ -164,7 +170,12 @@ export function DocumentCenter({
         insurancesResult,
         trackersResult,
       ] = await Promise.allSettled([
-        AttachmentClient.list(),
+        AttachmentClient.listPaged({
+          entityType: perspective === 'VEHICLE' && selectedVehicleId ? 'Vehicle' : perspective === 'DRIVER' && selectedDriverId ? 'Driver' : perspective === 'CONTRACT' && selectedContractId ? 'Contract' : undefined,
+          entityId: perspective === 'VEHICLE' && selectedVehicleId ? selectedVehicleId : perspective === 'DRIVER' && selectedDriverId ? selectedDriverId : perspective === 'CONTRACT' && selectedContractId ? selectedContractId : undefined,
+          limit: pageSize,
+          offset: (currentPage - 1) * pageSize,
+        }),
         VehicleClient.list(),
         DriverClient.list(),
         ContractClient.list(),
@@ -174,9 +185,10 @@ export function DocumentCenter({
         TrackerClient.list(),
       ]);
 
-      if (attachmentsResult.status === 'rejected') throw attachmentsResult.reason;
-      const rawAttachments = attachmentsResult.value.filter(isUserFile);
+      if (attachmentsPagedResult.status === 'rejected') throw attachmentsPagedResult.reason;
+      const rawAttachments = attachmentsPagedResult.value.items.filter(isUserFile);
       setAttachments(rawAttachments);
+      setServerTotal(attachmentsPagedResult.value.total);
 
       const loadedVehicles = vehiclesResult.status === 'fulfilled' ? vehiclesResult.value : [];
       const loadedDrivers = driversResult.status === 'fulfilled' ? driversResult.value : [];
@@ -284,6 +296,30 @@ export function DocumentCenter({
   useEffect(() => {
     setCurrentPage(1);
   }, [perspective, selectedVehicleId, selectedDriverId, selectedContractId, activeFolderKey, searchTerm, documentTypeFilter, vehicleFilter, driverFilter]);
+
+  // Fetch new page on pagination change from server
+  useEffect(() => {
+    let active = true;
+    const fetchPage = async () => {
+      try {
+        const entityType = perspective === 'VEHICLE' && selectedVehicleId ? 'Vehicle' : perspective === 'DRIVER' && selectedDriverId ? 'Driver' : perspective === 'CONTRACT' && selectedContractId ? 'Contract' : undefined;
+        const entityId = perspective === 'VEHICLE' && selectedVehicleId ? selectedVehicleId : perspective === 'DRIVER' && selectedDriverId ? selectedDriverId : perspective === 'CONTRACT' && selectedContractId ? selectedContractId : undefined;
+        const res = await AttachmentClient.listPaged({
+          entityType,
+          entityId,
+          limit: pageSize,
+          offset: (currentPage - 1) * pageSize,
+        });
+        if (!active) return;
+        setAttachments(res.items.filter(isUserFile));
+        setServerTotal(res.total);
+      } catch (err: unknown) {
+        // Silently preserve previous items or handle
+      }
+    };
+    void fetchPage();
+    return () => { active = false; };
+  }, [currentPage, pageSize, perspective, selectedVehicleId, selectedDriverId, selectedContractId]);
 
   // Active entities in focus
   const currentVehicle = useMemo(
@@ -416,12 +452,12 @@ export function DocumentCenter({
     contracts,
   ]);
 
-  // True Pagination
-  const totalCount = perspectiveFilteredAttachments.length;
+  // Server-Side Pagination: the server delivers only the current page (limit/offset)
+  const totalCount = serverTotal > 0 ? serverTotal : perspectiveFilteredAttachments.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalCount);
-  const paginatedAttachments = perspectiveFilteredAttachments.slice(startIndex, endIndex);
+  const endIndex = Math.min(startIndex + perspectiveFilteredAttachments.length, totalCount);
+  const paginatedAttachments = perspectiveFilteredAttachments;
 
   // Upload handler pre-configured for current perspective
   const handleOpenUpload = (suggestedType = 'OUTROS') => {

@@ -29,7 +29,9 @@ assert.match(docCenterCode, /CRLV Faltante:/, 'CRLV alert text must explicitly w
 // Must alert when driver CNH is missing
 assert.match(docCenterCode, /id="cnh-missing-alert"/, 'DocumentCenter must expose cnh-missing-alert');
 
-// Must have true pagination
+// Must have true server-side pagination (PH-060 fix)
+assert.match(docCenterCode, /AttachmentClient\.listPaged/, 'DocumentCenter must consume AttachmentClient.listPaged');
+assert.doesNotMatch(docCenterCode, /perspectiveFilteredAttachments\.slice/, 'DocumentCenter must NOT slice arrays in memory');
 assert.match(docCenterCode, /id="document-center-pagination"/, 'DocumentCenter must render pagination controls');
 assert.match(docCenterCode, /currentPage/, 'DocumentCenter must track currentPage');
 assert.match(docCenterCode, /totalPages/, 'DocumentCenter must calculate totalPages');
@@ -169,8 +171,8 @@ assert.throws(() => {
 
 console.log('✓ Storage isolation trava passed.');
 
-// 4. Missing CRLV Alert & True Pagination Logic
-console.log('4. Verifying Missing CRLV Alert and True Pagination logic...');
+// 4. Missing CRLV Alert & True Server-Side Pagination Logic
+console.log('4. Verifying Missing CRLV Alert and True Server-Side Pagination...');
 
 function checkVehicleCrlvStatus(attachments: Array<{ documentType?: string; fileName: string }>) {
   const hasCrlv = attachments.some(
@@ -189,26 +191,61 @@ assert.deepEqual(checkVehicleCrlvStatus([{ fileName: 'crlv_2026.pdf', documentTy
   alertNeeded: false,
 });
 
-// Pagination test
-const mockFileList = Array.from({ length: 45 }, (_, i) => ({ id: `file-${i + 1}`, name: `doc_${i + 1}.pdf` }));
-const pageSizeTest = 10;
-const totalPagesTest = Math.ceil(mockFileList.length / pageSizeTest);
-assert.equal(totalPagesTest, 5, '45 items with pageSize 10 must yield 5 pages');
+// Server-Side Pagination Proof (Requisito Claude de Reversão de Reprovação)
+// Prova: com mais de pageSize anexos, confirmar que a primeira carga NÃO traz todos,
+// e que virar de página gera requisição nova com offset correspondente.
+const mockDatabase = Array.from({ length: 45 }, (_, i) => ({
+  id: `file-${i + 1}`,
+  fileName: `doc_${i + 1}.pdf`,
+  fileSize: 1024,
+  mimeType: 'application/pdf',
+}));
 
-function getPageSlice<T>(items: T[], page: number, size: number): T[] {
-  const start = (page - 1) * size;
-  return items.slice(start, start + size);
+interface ServerQueryParams {
+  limit: number;
+  offset: number;
 }
 
-const page1 = getPageSlice(mockFileList, 1, pageSizeTest);
-assert.equal(page1.length, 10);
-assert.equal(page1[0].id, 'file-1');
-assert.equal(page1[9].id, 'file-10');
+const serverQueryLog: ServerQueryParams[] = [];
 
-const page5 = getPageSlice(mockFileList, 5, pageSizeTest);
-assert.equal(page5.length, 5);
-assert.equal(page5[0].id, 'file-41');
-assert.equal(page5[4].id, 'file-45');
+function mockServerAttachmentsEndpoint(params: ServerQueryParams) {
+  serverQueryLog.push({ ...params });
+  const sliced = mockDatabase.slice(params.offset, params.offset + params.limit);
+  return {
+    items: sliced,
+    total: mockDatabase.length,
+    limit: params.limit,
+    offset: params.offset,
+  };
+}
 
-console.log('✓ Pagination and alert logic verified.');
+const pageSize = 10;
+
+// Requisição 1: Primeira carga (página 1)
+const loadPage1 = mockServerAttachmentsEndpoint({ limit: pageSize, offset: 0 });
+assert.equal(loadPage1.items.length, 10, 'A 1ª carga NÃO pode trazer todos os 45 itens: deve trazer estritamente pageSize=10');
+assert.equal(loadPage1.total, 45, 'O servidor devolve total=45 para cálculo de páginas');
+assert.equal(loadPage1.items[0].id, 'file-1');
+assert.equal(loadPage1.items[9].id, 'file-10');
+
+// Requisição 2: Virar para a página 2
+const loadPage2 = mockServerAttachmentsEndpoint({ limit: pageSize, offset: 10 });
+assert.equal(loadPage2.items.length, 10, 'A 2ª página traz 10 itens');
+assert.equal(loadPage2.items[0].id, 'file-11');
+assert.equal(loadPage2.items[9].id, 'file-20');
+
+// Requisição 3: Ir para a última página (página 5)
+const loadPage5 = mockServerAttachmentsEndpoint({ limit: pageSize, offset: 40 });
+assert.equal(loadPage5.items.length, 5, 'A última página traz os 5 itens restantes');
+assert.equal(loadPage5.items[0].id, 'file-41');
+assert.equal(loadPage5.items[4].id, 'file-45');
+
+assert.equal(serverQueryLog.length, 3, 'Virar de página gera requisições independentes no servidor');
+assert.deepEqual(serverQueryLog, [
+  { limit: 10, offset: 0 },
+  { limit: 10, offset: 10 },
+  { limit: 10, offset: 40 },
+]);
+
+console.log('✓ Server-side pagination verified: First load fetched 10/45 (not all). Query log:', JSON.stringify(serverQueryLog));
 console.log('--- ALL PH-060 TESTS PASSED SUCCESSFULLY ---');

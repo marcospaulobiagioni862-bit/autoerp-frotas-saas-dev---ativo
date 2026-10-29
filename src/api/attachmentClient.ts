@@ -79,6 +79,13 @@ function encodedHeader(value: string): string {
   return encodeURIComponent(value);
 }
 
+export interface AttachmentPagedResponse {
+  items: FileAttachment[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export class AttachmentClient {
   static async list(filters?: { entityType?: string; entityId?: string }): Promise<FileAttachment[]> {
     const params = new URLSearchParams();
@@ -90,6 +97,25 @@ export class AttachmentClient {
     const payload = asRecord(await response.json());
     if (!Array.isArray(payload.items)) throw new Error('Invalid attachment list payload');
     return payload.items.map(validateAttachment);
+  }
+
+  static async listPaged(filters: { entityType?: string; entityId?: string; limit: number; offset: number }): Promise<AttachmentPagedResponse> {
+    const params = new URLSearchParams();
+    if (filters.entityType) params.set('entityType', filters.entityType);
+    if (filters.entityId) params.set('entityId', filters.entityId);
+    params.set('limit', String(filters.limit));
+    params.set('offset', String(filters.offset));
+    const response = await fetch(`/api/attachments?${params.toString()}`, { credentials: 'include' });
+    if (!response.ok) throw await apiError(response, 'Falha ao listar anexos');
+    const payload = asRecord(await response.json());
+    if (!Array.isArray(payload.items)) throw new Error('Invalid attachment list payload');
+    const total = typeof payload.total === 'number' ? payload.total : payload.items.length;
+    return {
+      items: payload.items.map(validateAttachment),
+      total,
+      limit: filters.limit,
+      offset: filters.offset,
+    };
   }
 
   static async listEntityGallery(entityType:'Vehicle'|'Driver',entityId:string):Promise<FileAttachment[]> {
